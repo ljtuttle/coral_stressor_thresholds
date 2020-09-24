@@ -1,0 +1,1480 @@
+---
+title: "Effects of sediment on the partial mortality of adult corals"
+author: "Lillian J. Tuttle"
+date: "7/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(mixmeta)
+library(dosresmeta)
+library(splines)
+
+#will want to getwd() and setwd(), as appropriate
+effectsize <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/effectsize2.csv", header=T)
+
+#keyboard shortcuts to remember: 
+#command-option-I inserts new code chunk
+#command-shift-M inserts pipeline symbols
+#command-enter runs line of code where cursor is (or highlighted portion)
+```
+  
+```{r, echo=FALSE, warning=FALSE}
+#Looking at data
+#head(effectsize) 
+
+#a lot of variables (columns) are factors instead of numeric/doubles/integers
+effectsize <- effectsize %>% #converting appropriate columns to numeric...
+  mutate_at(vars(ES, Hedges_d, Var_d, SE_d, CI_lo_d, CI_up_d, Sed_level_standardized, Sed_exposure, Sed_exposure_mg_d_L), as.character) %>% 
+  mutate_at(vars(ES, Hedges_d, Var_d, SE_d, CI_lo_d, CI_up_d, Sed_level_standardized, Sed_exposure, Sed_exposure_mg_d_L), as.numeric)
+#head(effectsize) #"double"-check!
+
+#Now create a new variable that has both Genus and species, remove sediment burial experiments, and remove irrelevant rows (non-controls, -treatments, or -baselines)
+effectsize <- effectsize %>%
+  mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
+  filter(Binary_sed_burial=="0") %>%
+  filter(!Control=="-1")
+#head(effectsize)
+
+#Separate into deposited sediment (DS) and suspended sediment (SS) datasets, WITH CONTROLS
+ES_DS <- effectsize %>% filter(DS_SS=="DS")
+ES_SS <- effectsize %>% filter(DS_SS=="SS")
+
+#Second dataset that that removes controls (Control == c("1","2"))
+effectsize2 <- effectsize %>% filter(Control=="0")
+#effectsize2 #"double"-check!
+
+#Separate into deposited sediment (DS) and suspended sediment (SS) datasets, WITHOUT CONTROLS
+ES_DS2 <- effectsize2 %>% filter(DS_SS=="DS")
+ES_SS2 <- effectsize2 %>% filter(DS_SS=="SS")
+
+#Now separate into independent datasets for each coral response for DEPOSITED SEDIMENT
+ES_DS_partialmort <- ES_DS %>% filter(Response == "partialmortality")
+#ES_DS_partialmort %>% count(Ref) #n=6 studies from 5 articles
+#Removing Hodgson time-series studies without proper controls
+ES_DS_partialmort3 <- ES_DS_partialmort %>% filter(!Ref=="DS08a") %>% filter(!Ref=="DS08b")
+ES_DS_partialmort3 %>% tally()
+ES_DS_partialmort3 %>% count(Ref)
+ES_DS_partialmort3 %>% count(Ref_name)
+ES_DS_partialmort3 %>% count(Gsp)
+ES_DS_partialmort3 %>% count(Updated_Genus)
+
+#Now separate into independent datasets for each coral response for SUSPENDED SEDIMENT
+ES_SS_partialmort <- ES_SS %>% filter(Response == "partialmortality")
+#ES_SS_partialmort #Comparison 'NA' is input as n/a (not a number)! need to reassign name to NAA
+ES_SS_partialmort[7:9,6] = "NAA"
+#ES_SS_partialmort #All better!
+ES_SS_partialmort %>% tally()
+ES_SS_partialmort %>% count(Ref)
+ES_SS_partialmort %>% count(Ref_name)
+ES_SS_partialmort %>% count(Gsp)
+ES_SS_partialmort %>% count(Updated_Genus)
+``` 
+  
+These datasets contain information from multiple articles (**Ref_name**) and studies/experiments (**Ref**) within those articles about the effects of DEPOSITED & SUSPENDED sediment on the **partial mortality rate** of adult corals, quantified as the percent of coral tissue area experiencing necrosis. Note that this is different from total colony mortality rate, which is the prevalence of complete colony mortality within an experimental group. I would like to explore the dose-response relationship between sediment 'dose' and the effect size, estimated here as the standardized mean difference between treatment and control, in terms of Hedges' *d*:
+
+- Hedges' *d* is the standardized mean difference between the treatment and control groups (Hedges and Olkin 1985). Each study may have multiple Hedges' *d* calculations, one for each treatment-control comparison at each time-point.   
+
+- 'Dose' can be quantified as sediment exposure concentration (mg/cm^2^/day for deposited sediment and mg/L for suspended sediment), exposure duration (days), or as "cumulative exposure", for which I multiply concentration and duration (mg/cm^2^ for deposited sediment and mg x day/L for suspended sediment).
+
+Each study/experiment (Ref) may contain multiple sets of controls and treatments (due to using multiple species or sediment types, for instance). Thus, I have added two categorical vectors, '**Comparison**' and 'Control', which group each set of control-treatment comparisons into a unique two-letter code, within which is one control (Control=="1") and at least one treatment (Control=="0"). **Therefore, 'Comparison' is nested within 'Ref', which is further nested within 'Ref_name'.**
+
+```{r, echo=FALSE}
+##Using dosresmeta to calculate Hedges' d and variance of d
+#with Hodgson 1989 Chapter IV
+covar_DS_partialmort <- by(ES_DS_partialmort, ES_DS_partialmort$Comparison, function(x) 
+  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
+ES_DS_partialmort$smd <- unlist(lapply(covar_DS_partialmort, function(x) x$y))
+ES_DS_partialmort$vmd <- unlist(lapply(covar_DS_partialmort, function(x) x$v))
+
+#without Hodgson 1989 Chapter IV
+covar_DS_partialmort3 <- by(ES_DS_partialmort3, ES_DS_partialmort3$Comparison, function(x) 
+  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
+ES_DS_partialmort3$smd <- unlist(lapply(covar_DS_partialmort3, function(x) x$y))
+ES_DS_partialmort3$vmd <- unlist(lapply(covar_DS_partialmort3, function(x) x$v))
+
+covar_SS_partialmort <- by(ES_SS_partialmort, ES_SS_partialmort$Comparison, function(x) 
+  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
+ES_SS_partialmort$smd <- unlist(lapply(covar_SS_partialmort, function(x) x$y))
+ES_SS_partialmort$vmd <- unlist(lapply(covar_SS_partialmort, function(x) x$v))
+
+#Looking at data to make sure smd and vmd added as columns
+#ES_DS_partialmort
+#ES_DS_partialmort3
+#ES_SS_partialmort
+
+#Removing controls for modeling
+ES_DS_partialmort2 <- subset(ES_DS_partialmort, Control=="0")
+ES_DS_partialmort4 <- subset(ES_DS_partialmort3, Control=="0")
+ES_SS_partialmort2 <- subset(ES_SS_partialmort, Control=="0")
+
+#Looking at data to make sure controls were removed
+#ES_DS_partialmort2
+#ES_DS_partialmort4
+#ES_SS_partialmort2
+ES_DS_partialmort4 %>% tally()
+ES_SS_partialmort2 %>% tally()
+``` 
+  
+# I. Partial Mortality 
+
+## A. Deposited Sediment  
+  
+### 1. Plots  
+I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to cumulative exposure. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
+
+```{r, echo=FALSE, warning=FALSE}
+##WITH HODGSON 1989 PHD CHAPTER IV
+#CUMULATIVE EXPOSURE vs. effect size, by study
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_partialmort2, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment cumulative exposure (mg/cm2)",
+       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_log10(limits = c(10,40000), breaks=c(10,100,1000,10000), 
+                label=c("10","100","1000","10000"))
+#Using dosresmeta's calculation of Hedges' d and variance of d
+ggplot(ES_DS_partialmort2, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment cumulative exposure (mg/cm2)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_log10(limits = c(10,40000), breaks=c(10,100,1000,10000), 
+                label=c("10","100","1000","10000")) 
+
+
+##WITHOUT HODGSON 1989 PHD CHAPTER IV
+#CUMULATIVE EXPOSURE vs. effect size, by study
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_partialmort4, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment cumulative exposure (mg/cm2)",
+       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_log10(limits = c(100,40000), breaks=c(100,1000,10000), 
+                label=c("100","1000","10000")) 
+#Using dosresmeta's calculation of Hedges' d and variance of d
+ggplot(ES_DS_partialmort4, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment cumulative exposure (mg/cm2)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_log10(limits = c(100,40000), breaks=c(100,1000,10000), 
+                label=c("100","1000","10000")) 
+
+#EXPOSURE CONCENTRATION vs. effect size, by study
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_partialmort4, 
+       aes(x = Sed_level_standardized,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() 
+#Using dosresmeta's calculation of Hedges' d and variance of d
+ggplot(ES_DS_partialmort4, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() 
+
+#EXPOSURE CONCENTRATION vs. effect size, by SEDIMENT TYPE
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_partialmort4, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Sed_grain_category,
+           shape = Sed_source,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Sediment relative\ngrain size",
+       shape = "Sediment source") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() 
+ggplot(ES_DS_partialmort4, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Sed_grain_class,
+           shape = Sed_mineralogy,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Sediment\ngrain class",
+       shape = "Sediment mineralogy") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic()
+
+#EXPOSURE CONCENTRATION vs. effect size, by PHYLOGENY
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_partialmort4, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Updated_Genus,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Genus") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic()
+
+#EXPOSURE CONCENTRATION vs. effect size, by OCEAN and REGION
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_partialmort4, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Region,
+           shape = Ocean,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Region",
+       shape = "Ocean") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic()
+```
+  
+It is interesting that there is a difference between how I calculated Hedges' *d* and how *dosresmeta* appears to calculate it. But in either case, there does not appear to be a relationship between sediment exposure and effect size. Also, there does not appear to be strong effects of phylogeny (genus), geography (ocean and region), or sediment type (source, origin, grain size).
+  
+### 2. Model Fitting 
+The following set of functions model fixed and random (nested) effects WITHOUT accounting for within-comparison (or within-study) correlations. The output for each is a univariate, random-effects meta-regression.  
+
+```{r, echo=FALSE, warning=FALSE}
+#?mixmeta
+
+##ALL ANALYSES WITHOUT HODGSON 1989 PHD CHAPTER IV -- field or lab
+# Organizational Note: 
+#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
+#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
+#All models with 'a' or 'c' at the end of its name have manually calculated Hedges' d as its response.
+#All models with 'b' or 'd' at the end of its name have covar.smd calculated Hedges' d as its response.
+
+# LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+#Error in chol.default(X[[i]], ...) : the leading minor of order 4/5 is not positive definite
+#mod_DS_partialmort_1a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2, S = Var_d,
+#                       random =  ~ Sed_exposure_mg_cm2 | Comparison,
+#                       data = ES_DS_partialmort4, method = "ml")
+#mod_DS_partialmort_1b <- mixmeta(smd ~ Sed_exposure_mg_cm2, S = vmd,
+#                      random =  ~ Sed_exposure_mg_cm2 | Comparison,
+#                      data = ES_DS_partialmort4, method = "ml")
+mod_DS_partialmort_1c <- mixmeta(Hedges_d ~ Sed_level_standardized, S = Var_d,
+                       random =  ~ Sed_level_standardized | Comparison,
+                       data = ES_DS_partialmort4, method = "ml")
+mod_DS_partialmort_1d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
+                      random =  ~ Sed_level_standardized | Comparison,
+                      data = ES_DS_partialmort4, method = "ml")
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+#Error in chol.default(X[[i]], ...) : the leading minor of order 5 is not positive definite
+#mod_DS_partialmort_2a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2, S = Var_d,
+#                       random =  ~ Sed_exposure_mg_cm2 | Ref/Comparison,
+#                       data = ES_DS_partialmort4, method = "ml")
+#mod_DS_partialmort_2b <- mixmeta(smd ~ Sed_exposure_mg_cm2, S = vmd,
+#                      random =  ~ Sed_exposure_mg_cm2 | Ref/Comparison,
+#                      data = ES_DS_partialmort4, method = "ml")
+mod_DS_partialmort_2c <- mixmeta(Hedges_d ~ Sed_level_standardized, S = Var_d,
+                       random =  ~ Sed_level_standardized | Ref/Comparison,
+                       data = ES_DS_partialmort4, method = "ml")
+mod_DS_partialmort_2d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
+                      random =  ~ Sed_level_standardized | Ref/Comparison,
+                      data = ES_DS_partialmort4, method = "ml")
+```
+  
+To account for within-comparison correlations in the mixmeta model, I replace the 'S' argument with a 'control' argument, which requires me to provide the covariance matrices, as done with the covar.smd function. 
+  
+```{r, echo=FALSE, warning=FALSE}
+# COMPUTE THE WITHIN-COMPARISON CORRELATIONS 
+# already done above but code repeated here...
+#covar_DS_partialmort3 <- by(ES_DS_partialmort3, ES_DS_partialmort3$Comparison, function(x) 
+#  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
+
+# LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON CORRELATIONS
+#Code for covariance matrix to include for addSlist for Comparison random effect
+newlist_PMOR <- list(NA)
+for (i in seq(1,length(covar_DS_partialmort3))) {
+newlist_PMOR[i] <- list(covar_DS_partialmort3[[i]]$S)
+}
+#Error in chol.default(X[[i]], ...) : the leading minor of order 5 is not positive definite
+#mod_DS_partialmort_5a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2,
+#                       random = ~ Sed_exposure_mg_cm2 | Comparison,
+#                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+#                       control=list(addSlist=newlist_PMOR))
+#mod_DS_partialmort_5b <- mixmeta(smd ~ Sed_exposure_mg_cm2,
+#                       random = ~ Sed_exposure_mg_cm2 | Comparison,
+#                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+#                       control=list(addSlist=newlist_PMOR))
+mod_DS_partialmort_5c <- mixmeta(Hedges_d ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR))
+mod_DS_partialmort_5d <- mixmeta(smd ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR))
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
+#Code for covariance matrix to include for addSlist for Ref/Comparison
+newlist_PMOR2 <- list(NA) #collects the list of covariance matrices for the block diag matrix by reference for the nested hierarchial ref/comparison
+templist_PMOR <- list(NA) #holds temp list of covariance matrices associated with each reference
+templist_PMOR2 <-list(NA)
+reflista <- ES_DS_partialmort3 %>% distinct(Ref,Ref_name,Comparison)
+reflist <- reflista[,1]
+for (i in seq(1,length(unique(reflista$Ref))))  {
+  #pull the elements from covar_DS_partialmort3 that are all from the same reference [i]
+  templist_PMOR[i] <-list(covar_DS_partialmort3[reflist==unique(reflista$Ref)[i]])
+  for (j in seq(1,length(templist_PMOR[[i]]))) {
+  #for each comparison in the reference, pull out the covar matrices (element $S) and put in into templist_PMOR2
+     templist_PMOR2[j] <- list(templist_PMOR[[i]][[j]]$S)
+  }
+  #turn list of covars from all comparison in one reference into block diag matrix
+  newlist_PMOR2[i] <- list(bdiagMat(templist_PMOR2))
+  templist_PMOR2 <- list(NA)
+}
+#Error in chol.default(X[[i]], ...) : the leading minor of order 17/23 is not positive definite
+#mod_DS_partialmort_6a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2,
+#                       random = ~ Sed_exposure_mg_cm2 | Ref/Comparison,
+#                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+#                       control=list(addSlist=newlist_PMOR2))
+#mod_DS_partialmort_6b <- mixmeta(smd ~ Sed_exposure_mg_cm2,
+#                       random = ~ Sed_exposure_mg_cm2 | Ref/Comparison,
+#                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+#                       control=list(addSlist=newlist_PMOR2))
+mod_DS_partialmort_6c <- mixmeta(Hedges_d ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Ref/Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR2))
+mod_DS_partialmort_6d <- mixmeta(smd ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Ref/Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR2))
+```
+  
+And now to compare relative fit of linear models...
+
+```{r, echo=FALSE, warning=FALSE}
+# Model Comparisons
+AIC(mod_DS_partialmort_1c, mod_DS_partialmort_2c, mod_DS_partialmort_5c, mod_DS_partialmort_6c) 
+#of these, model 1c has lowest AIC
+
+AIC(mod_DS_partialmort_1d, mod_DS_partialmort_2d, mod_DS_partialmort_5d, mod_DS_partialmort_6d) 
+#of these, model 1d has lowest AIC
+```
+  
+And now to evaluate residuals of models...
+
+```{r, echo=FALSE, warning=FALSE}
+# Residuals vs. Fitted Plots
+op <- par(mfrow = c(1,2), mar = c(2,2,4,1))
+
+resid_c <- resid(mod_DS_partialmort_1c)
+fitted_c <- fitted(mod_DS_partialmort_1c)
+plot(fitted_c, resid_c, main = "C: Hedges_d ~ mg_cm2_d, S = Var_d,
+     random =  ~ mg_cm2_d | Comparison")
+abline(0,0)
+#mod_DS_partialmort_2c within 0.3 AIC
+
+resid_d <- resid(mod_DS_partialmort_1d)
+fitted_d <- fitted(mod_DS_partialmort_1d)
+plot(fitted_d, resid_d, main = "D: smd ~ mg_cm2_d, S = vmd,
+     random =  ~ mg_cm2_d | Comparison")
+abline(0,0)
+
+par(op)
+
+
+# Normal Q-Q Plot
+op <- par(mfrow = c(1,2), mar = c(2,2,4,1))
+qqnorm(resid_c)
+qqline(resid_c)
+qqnorm(resid_d)
+qqline(resid_d)
+par(op)
+
+
+# Patterns:
+# 1.  Both look very good (except D's Q-Q plot) with low magnitudes of residuals and even spread across fitted values axis
+# 2.  Because A and B did not work, let's try a log transformation of sediment exposure to see if that helps.
+```
+  
+Now let's check out a log, base 10 transformation of sediment exposure to see if it improves the residuals of the models.
+  
+```{r, echo=FALSE, warning=FALSE}
+#?mixmeta
+
+# Organizational Note: 
+#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
+#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
+#All models with 'a' or 'c' at the end of its name have manually calculated Hedges' d as its response.
+#All models with 'b' or 'd' at the end of its name have covar.smd calculated Hedges' d as its response.
+
+log10_mg_cm2 <- log10(ES_DS_partialmort4$Sed_exposure_mg_cm2)
+log10_mg_cm2_d <- log10(ES_DS_partialmort4$Sed_level_standardized)
+
+# LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+log_mod_DS_partialmort_1a <- mixmeta(Hedges_d ~ log10_mg_cm2, S = Var_d,
+                       random =  ~ log10_mg_cm2 | Comparison,
+                       data = ES_DS_partialmort4, method = "ml")
+log_mod_DS_partialmort_1b <- mixmeta(smd ~ log10_mg_cm2, S = vmd,
+                      random =  ~ log10_mg_cm2 | Comparison,
+                      data = ES_DS_partialmort4, method = "ml")
+log_mod_DS_partialmort_1c <- mixmeta(Hedges_d ~ log10_mg_cm2_d, S = Var_d,
+                       random =  ~ log10_mg_cm2_d | Comparison,
+                       data = ES_DS_partialmort4, method = "ml")
+log_mod_DS_partialmort_1d <- mixmeta(smd ~ log10_mg_cm2_d, S = vmd,
+                      random =  ~ log10_mg_cm2_d | Comparison,
+                      data = ES_DS_partialmort4, method = "ml")
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+log_mod_DS_partialmort_2a <- mixmeta(Hedges_d ~ log10_mg_cm2, S = Var_d,
+                       random =  ~ log10_mg_cm2 | Ref/Comparison,
+                       data = ES_DS_partialmort4, method = "ml")
+log_mod_DS_partialmort_2b <- mixmeta(smd ~ log10_mg_cm2, S = vmd,
+                      random =  ~ log10_mg_cm2 | Ref/Comparison,
+                      data = ES_DS_partialmort4, method = "ml")
+log_mod_DS_partialmort_2c <- mixmeta(Hedges_d ~ log10_mg_cm2_d, S = Var_d,
+                       random =  ~ log10_mg_cm2_d | Ref/Comparison,
+                       data = ES_DS_partialmort4, method = "ml")
+log_mod_DS_partialmort_2d <- mixmeta(smd ~ log10_mg_cm2_d, S = vmd,
+                      random =  ~ log10_mg_cm2_d | Ref/Comparison,
+                      data = ES_DS_partialmort4, method = "ml")
+```
+
+To account for within-comparison correlations in the mixmeta model, I replace the 'S' argument with a 'control' argument, which requires me to provide the covariance matrices, as done with the covar.smd function. 
+
+```{r, echo=FALSE, warning=FALSE}
+# COMPUTE THE WITHIN-COMPARISON CORRELATIONS 
+# already done above but code repeated here...
+#covar_DS_partialmort3 <- by(ES_DS_partialmort3, ES_DS_partialmort3$Comparison, function(x) 
+#  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
+
+# LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON CORRELATIONS
+#Code for covariance matrix to include for addSlist for Comparison random effect
+newlist_log_PMOR <- list(NA)
+for (i in seq(1,length(covar_DS_partialmort3))) {
+newlist_log_PMOR[i] <- list(covar_DS_partialmort3[[i]]$S)
+}
+log_mod_DS_partialmort_5a <- mixmeta(Hedges_d ~ log10_mg_cm2,
+                       random = ~ log10_mg_cm2 | Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR))
+log_mod_DS_partialmort_5b <- mixmeta(smd ~ log10_mg_cm2,
+                       random = ~ log10_mg_cm2 | Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR))
+log_mod_DS_partialmort_5c <- mixmeta(Hedges_d ~ log10_mg_cm2_d,
+                       random = ~ log10_mg_cm2_d | Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR))
+log_mod_DS_partialmort_5d <- mixmeta(smd ~ log10_mg_cm2_d,
+                       random = ~ log10_mg_cm2_d | Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR))
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
+#Code for covariance matrix to include for addSlist for Ref/Comparison
+newlist_log_PMOR2 <- list(NA) #collects the list of covariance matrices for the block diag matrix by reference for the nested hierarchial ref/comparison
+templist_log_PMOR <- list(NA) #holds temp list of covariance matrices associated with each reference
+templist_log_PMOR2 <-list(NA)
+reflista <- ES_DS_partialmort3 %>% distinct(Ref,Ref_name,Comparison)
+reflist <- reflista[,1]
+for (i in seq(1,length(unique(reflista$Ref))))  {
+  #pull the elements from covar_DS_partialmort3 that are all from the same reference [i]
+  templist_log_PMOR[i] <-list(covar_DS_partialmort3[reflist==unique(reflista$Ref)[i]])
+  for (j in seq(1,length(templist_log_PMOR[[i]]))) {
+  #for each comparison in the reference, pull out the covar matrices (element $S) and put in into templist_log_PMOR2
+     templist_log_PMOR2[j] <- list(templist_log_PMOR[[i]][[j]]$S)
+  }
+  #turn list of covars from all comparison in one reference into block diag matrix
+  newlist_log_PMOR2[i] <- list(bdiagMat(templist_log_PMOR2))
+  templist_log_PMOR2 <- list(NA)
+}
+log_mod_DS_partialmort_6a <- mixmeta(Hedges_d ~ log10_mg_cm2,
+                       random = ~ log10_mg_cm2 | Ref/Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR2))
+log_mod_DS_partialmort_6b <- mixmeta(smd ~ log10_mg_cm2,
+                       random = ~ log10_mg_cm2 | Ref/Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR2))
+log_mod_DS_partialmort_6c <- mixmeta(Hedges_d ~ log10_mg_cm2_d,
+                       random = ~ log10_mg_cm2_d | Ref/Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR2))
+log_mod_DS_partialmort_6d <- mixmeta(smd ~ log10_mg_cm2_d,
+                       random = ~ log10_mg_cm2_d | Ref/Comparison,
+                       data=ES_DS_partialmort4, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR2))
+```
+  
+### 3. Model Comparison and Summary
+And now to compare relative fit of log-linear models...
+
+```{r, echo=FALSE, warning=FALSE}
+# Model Comparisons
+AIC(log_mod_DS_partialmort_1a, log_mod_DS_partialmort_2a, log_mod_DS_partialmort_5a, log_mod_DS_partialmort_6a) 
+#of these, model 1a has lowest AIC
+
+AIC(log_mod_DS_partialmort_1b, log_mod_DS_partialmort_2b, log_mod_DS_partialmort_5b, log_mod_DS_partialmort_6b) 
+#of these, model 1b has lowest AIC
+
+AIC(log_mod_DS_partialmort_1c, log_mod_DS_partialmort_2c, log_mod_DS_partialmort_5c, log_mod_DS_partialmort_6c) 
+#of these, model 1c has lowest AIC
+
+AIC(log_mod_DS_partialmort_1d, log_mod_DS_partialmort_2d, log_mod_DS_partialmort_5d, log_mod_DS_partialmort_6d) 
+#of these, model 1d has lowest AIC
+```
+  
+And now to evaluate residuals of models...
+
+```{r, echo=FALSE, warning=FALSE}
+# Residuals vs. Fitted Plots
+op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
+
+resid_loga <- resid(log_mod_DS_partialmort_1a)
+fitted_loga <- fitted(log_mod_DS_partialmort_1a)
+plot(fitted_loga, resid_loga, main = "A: Hedges_d ~ log_mg_cm2, S=Var_d,
+     random =  ~ log_mg_cm2 | Comparison")
+abline(0,0)
+
+resid_logb <- resid(log_mod_DS_partialmort_1b)
+fitted_logb <- fitted(log_mod_DS_partialmort_1b)
+plot(fitted_logb, resid_logb, main = "B: smd ~ log_mg_cm2, S = vmd,
+     random =  ~ log_mg_cm2 | Comparison")
+abline(0,0)
+
+resid_logc <- resid(log_mod_DS_partialmort_1c)
+fitted_logc <- fitted(log_mod_DS_partialmort_1c)
+plot(fitted_logc, resid_logc, main = "C: Hedges_d ~ log_mg_cm2_d, S=Var_d,
+     random =  ~ log_mg_cm2_d | Comparison")
+abline(0,0)
+
+resid_logd <- resid(log_mod_DS_partialmort_1d)
+fitted_logd <- fitted(log_mod_DS_partialmort_1d)
+plot(fitted_logd, resid_logd, main = "D: smd ~ log_mg_cm2_d, S = vmd,
+     random =  ~ log_mg_cm2_d | Comparison")
+abline(0,0)
+
+par(op)
+
+
+# Normal Q-Q Plot
+op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
+qqnorm(resid_loga)
+qqline(resid_loga)
+qqnorm(resid_logb)
+qqline(resid_logb)
+qqnorm(resid_logc)
+qqline(resid_logc)
+qqnorm(resid_logd)
+qqline(resid_logd)
+par(op)
+
+
+# Patterns:
+# 1.  Models A and B look good! Low magnitude residuals and even spread. C and D log models weren't necessary and seem to make things worse anyay, so stick with linear models.
+# 2.  No obvious non-linearities.
+```
+  
+### 4. Best-Fit Model Summary
+  
+#### i. MG/CM2 IS PREDICTOR, Model using manual calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(log_mod_DS_partialmort_1a)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(log_mod_DS_partialmort_1a, newdata=data.frame(Sed_exposure_mg_cm2=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_log_mod_DS_partialmort_1a <- predict(log_mod_DS_partialmort_1a, newdata=ES_DS_partialmort4, ci=TRUE)
+ES_DS_partialmort4_CI <- cbind(ES_DS_partialmort4, pred_log_mod_DS_partialmort_1a)
+#head(ES_DS_partialmort4_CI)
+min_exp_a <- ES_DS_partialmort4_CI %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_exp_a=min(Sed_exposure_mg_cm2))
+min_exp_a2 <- as.numeric(min_exp_a)
+
+ggplot(ES_DS_partialmort4_CI, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  labs(x = expression("Sediment cumulative exposure (mg/cm"^"2"*")"),
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_exp_a2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_exposure_mg_cm2, y = Hedges_d,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_exposure_mg_cm2, y = fit), inherit.aes=FALSE) +
+  theme_classic() +
+  scale_x_log10(limits = c(100,40000), breaks=c(100,1000,10000,min_exp_a2), 
+                label=c("100","1000","10000",round(min_exp_a2,digits=1))) 
+```
+  
+#### ii. MG/CM2 IS PREDICTOR, Model using dosresmeta calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(log_mod_DS_partialmort_1b)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(log_mod_DS_partialmort_1b, newdata=data.frame(Sed_exposure_mg_cm2=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_log_mod_DS_partialmort_1b <- predict(log_mod_DS_partialmort_1b, newdata=ES_DS_partialmort4, ci=TRUE)
+ES_DS_partialmort4_CI2 <- cbind(ES_DS_partialmort4, pred_log_mod_DS_partialmort_1b)
+#head(ES_DS_partialmort4_CI2)
+min_exp_b <- ES_DS_partialmort4_CI2 %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_exp_b=min(Sed_exposure_mg_cm2))
+min_exp_b2 <- as.numeric(min_exp_b)
+
+ggplot(ES_DS_partialmort4_CI2, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  labs(x = expression("Sediment cumulative exposure (mg/cm"^"2"*")"),
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_exp_b2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_exposure_mg_cm2, y = smd,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_exposure_mg_cm2, y = fit), inherit.aes=FALSE) +
+  theme_classic() +
+  scale_x_log10(limits = c(100,40000), breaks=c(100,1000,10000,min_exp_b2), 
+                label=c("100","1000","10000",round(min_exp_b2,digits=1))) 
+```
+  
+#### iii. MG/CM2/DAY IS PREDICTOR, Model using manual calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(mod_DS_partialmort_1c)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(mod_DS_partialmort_1c, newdata=data.frame(Sed_exposure_mg_cm2=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_mod_DS_partialmort_1c <- predict(mod_DS_partialmort_1c, newdata=ES_DS_partialmort4, ci=TRUE)
+ES_DS_partialmort4_CI3 <- cbind(ES_DS_partialmort4, pred_mod_DS_partialmort_1c)
+#head(ES_DS_partialmort4_CI3)
+min_conc_c <- ES_DS_partialmort4_CI3 %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_conc_c=min(Sed_level_standardized))
+min_conc_c2 <- as.numeric(min_conc_c)
+
+ggplot(ES_DS_partialmort4_CI3, 
+       aes(x = Sed_level_standardized,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"),
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_conc_c2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_level_standardized, y = Hedges_d,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_level_standardized, y = fit), inherit.aes=FALSE) +
+  theme_classic()
+```
+  
+#### iv. MG/CM2/DAY IS PREDICTOR, Model using dosresmeta calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(mod_DS_partialmort_1d)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(mod_DS_partialmort_1d, newdata=data.frame(Sed_level_standardized=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_mod_DS_partialmort_1d <- predict(mod_DS_partialmort_1d, newdata=ES_DS_partialmort4, ci=TRUE)
+ES_DS_partialmort4_CI4 <- cbind(ES_DS_partialmort4, pred_mod_DS_partialmort_1d)
+#head(ES_DS_partialmort4_CI4)
+min_conc_d <- ES_DS_partialmort4_CI4 %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_conc_d=min(Sed_level_standardized))
+min_conc_d2 <- as.numeric(min_conc_d)
+
+ggplot(ES_DS_partialmort4_CI4, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"),
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_conc_d2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_level_standardized, y = smd,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_level_standardized, y = fit), inherit.aes=FALSE) +
+  theme_classic()
+```
+  
+  
+## B. Suspended Sediment  
+  
+### 1. Plots  
+I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to cumulative exposure. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
+
+```{r, echo=FALSE, warning=FALSE}
+#CUMULATIVE EXPOSURE vs. effect size, by study
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_SS_partialmort2, 
+       aes(x = Sed_exposure_mg_d_L,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment cumulative exposure (mg x day/L)",
+       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic()
+#Using dosresmeta's calculation of Hedges' d and variance of d
+ggplot(ES_SS_partialmort2, 
+       aes(x = Sed_exposure_mg_d_L,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment cumulative exposure (mg x day/L)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic()
+
+#EXPOSURE CONCENTRATION vs. effect size, by study
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_SS_partialmort2, 
+       aes(x = Sed_level_standardized,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/L)",
+       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_continuous(limits=c(0,100))
+#Using dosresmeta's calculation of Hedges' d and variance of d
+ggplot(ES_SS_partialmort2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/L)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_continuous(limits=c(0,100)) 
+
+
+#EXPOSURE CONCENTRATION vs. effect size, by SEDIMENT TYPE
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_SS_partialmort2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Sed_grain_category,
+           shape = Sed_source,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/L)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Sediment relative\ngrain size",
+       shape = "Sediment source") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_continuous(limits=c(0,100)) 
+ggplot(ES_SS_partialmort2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Sed_grain_class,
+           shape = Sed_mineralogy,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/L)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Sediment\ngrain class",
+       shape = "Sediment mineralogy") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_continuous(limits=c(0,100)) 
+
+#EXPOSURE CONCENTRATION vs. effect size, by PHYLOGENY
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_SS_partialmort2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Updated_Genus,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/L)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Genus") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_continuous(limits=c(0,100)) 
+
+#EXPOSURE CONCENTRATION vs. effect size, by OCEAN and REGION
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_SS_partialmort2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Region,
+           shape = Ocean,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Tissue mortality rate") +
+  labs(x = "Sediment exposure concentration (mg/L)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Region",
+       shape = "Ocean") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_continuous(limits=c(0,100)) 
+```
+  
+It is interesting that there is a difference between how I calculated Hedges' *d* and how *dosresmeta* appears to calculate it. But in both cases, there is not strong evidence for a relationship between sediment exposure and effect size. There may be an effect of phylogeny (genus) -- for instance, Platygyra is resilient while other genera are less so. Geography (ocean and region) and sediment type (source, origin, grain size) may not affect the relationship.
+  
+### 2. Model Fitting  
+The following set of functions model fixed and random (nested) effects WITHOUT accounting for within-comparison (or within-study) correlations. The output for each is a univariate, random-effects meta-regression.
+
+```{r, echo=FALSE, warning=FALSE}
+#?mixmeta
+
+## MG x DAY/L IS PREDICTOR
+#Using previously calculated Hedges' d and variance of d
+# LINEAR FIXED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+mod_SS_partialmort1a <- mixmeta(Hedges_d ~ Sed_exposure_mg_d_L, S = Var_d,
+                          data = ES_SS_partialmort2, method = "ml")
+
+# LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+mod_SS_partialmort2a <- mixmeta(Hedges_d ~ Sed_exposure_mg_d_L, S = Var_d,
+                       random =  ~ Sed_exposure_mg_d_L | Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+mod_SS_partialmort3a <- mixmeta(Hedges_d ~ Sed_exposure_mg_d_L, S = Var_d,
+                       random =  ~ Sed_exposure_mg_d_L | Ref/Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+```
+
+```{r, echo=FALSE, warning=FALSE}
+#?mixmeta
+
+# Organizational Note: 
+#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
+#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
+#All models with 'a' or 'c' at the end of its name have manually calculated Hedges' d as its response.
+#All models with 'b' or 'd' at the end of its name have covar.smd calculated Hedges' d as its response.
+
+# LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+mod_SS_partialmort_1a <- mixmeta(Hedges_d ~ Sed_exposure_mg_d_L, S = Var_d,
+                       random =  ~ Sed_exposure_mg_d_L | Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+mod_SS_partialmort_1b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
+                      random =  ~ Sed_exposure_mg_d_L | Comparison,
+                      data = ES_SS_partialmort2, method = "ml")
+mod_SS_partialmort_1c <- mixmeta(Hedges_d ~ Sed_level_standardized, S = Var_d,
+                       random =  ~ Sed_level_standardized | Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+mod_SS_partialmort_1d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
+                      random =  ~ Sed_level_standardized | Comparison,
+                      data = ES_SS_partialmort2, method = "ml")
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+mod_SS_partialmort_2a <- mixmeta(Hedges_d ~ Sed_exposure_mg_d_L, S = Var_d,
+                       random =  ~ Sed_exposure_mg_d_L | Ref/Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+mod_SS_partialmort_2b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
+                      random =  ~ Sed_exposure_mg_d_L | Ref/Comparison,
+                      data = ES_SS_partialmort2, method = "ml")
+mod_SS_partialmort_2c <- mixmeta(Hedges_d ~ Sed_level_standardized, S = Var_d,
+                       random =  ~ Sed_level_standardized | Ref/Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+mod_SS_partialmort_2d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
+                      random =  ~ Sed_level_standardized | Ref/Comparison,
+                      data = ES_SS_partialmort2, method = "ml")
+```
+
+To account for within-comparison correlations in the mixmeta model, I replace the 'S' argument with a 'control' argument, which requires me to provide the covariance matrices, as done with the covar.smd function. 
+
+```{r, echo=FALSE, warning=FALSE}
+# COMPUTE THE WITHIN-COMPARISON CORRELATIONS 
+# already done above but code repeated here...
+#covar_SS_partialmort <- by(ES_SS_partialmort, ES_SS_partialmort$Comparison, function(x) 
+#  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
+
+# LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON CORRELATIONS
+#Code for covariance matrix to include for addSlist for Comparison random effect
+newlist_PMOR_SS <- list(NA)
+for (i in seq(1,length(covar_SS_partialmort))) {
+newlist_PMOR_SS[i] <- list(covar_SS_partialmort[[i]]$S)
+}
+#Error in chol.default(X[[i]], ...) : the leading minor of order 4 is not positive definite
+mod_SS_partialmort_5a <- mixmeta(Hedges_d ~ Sed_exposure_mg_d_L,
+                       random = ~ Sed_exposure_mg_d_L | Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR_SS))
+mod_SS_partialmort_5b <- mixmeta(smd ~ Sed_exposure_mg_d_L,
+                       random = ~ Sed_exposure_mg_d_L | Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR_SS))
+mod_SS_partialmort_5c <- mixmeta(Hedges_d ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR_SS))
+mod_SS_partialmort_5d <- mixmeta(smd ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR_SS))
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
+#Code for covariance matrix to include for addSlist for Ref/Comparison
+newlist_PMOR_SS2 <- list(NA) #collects the list of covariance matrices for the block diag matrix by reference for the nested hierarchial ref/comparison
+templist_PMOR_SS <- list(NA) #holds temp list of covariance matrices associated with each reference
+templist_PMOR_SS2 <-list(NA)
+reflista <- ES_SS_partialmort %>% distinct(Ref,Ref_name,Comparison)
+reflist <- reflista[,1]
+for (i in seq(1,length(unique(reflista$Ref))))  {
+  #pull the elements from covar_SS_partialmort that are all from the same reference [i]
+  templist_PMOR_SS[i] <-list(covar_SS_partialmort[reflist==unique(reflista$Ref)[i]])
+  for (j in seq(1,length(templist_PMOR_SS[[i]]))) {
+  #for each comparison in the reference, pull out the covar matrices (element $S) and put in into templist_PMOR_SS2
+     templist_PMOR_SS2[j] <- list(templist_PMOR_SS[[i]][[j]]$S)
+  }
+  #turn list of covars from all comparison in one reference into block diag matrix
+  newlist_PMOR_SS2[i] <- list(bdiagMat(templist_PMOR_SS2))
+  templist_PMOR_SS2 <- list(NA)
+}
+#Error in chol.default(X[[i]], ...) : the leading minor of order 35/10 is not positive definite
+mod_SS_partialmort_6a <- mixmeta(Hedges_d ~ Sed_exposure_mg_d_L,
+                       random = ~ Sed_exposure_mg_d_L | Ref/Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR_SS2))
+mod_SS_partialmort_6b <- mixmeta(smd ~ Sed_exposure_mg_d_L,
+                       random = ~ Sed_exposure_mg_d_L | Ref/Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR_SS2))
+mod_SS_partialmort_6c <- mixmeta(Hedges_d ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Ref/Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR_SS2))
+mod_SS_partialmort_6d <- mixmeta(smd ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Ref/Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_PMOR_SS2))
+```
+  
+And now to compare relative fit of linear models...
+
+```{r, echo=FALSE, warning=FALSE}
+# Model Comparisons
+AIC(mod_SS_partialmort_1a, mod_SS_partialmort_2a, mod_SS_partialmort_5a, mod_SS_partialmort_6a) 
+#of these, model 1a has lowest AIC
+
+AIC(mod_SS_partialmort_1b, mod_SS_partialmort_2b, mod_SS_partialmort_5b, mod_SS_partialmort_6b) 
+#of these, model 5b has lowest AIC
+
+AIC(mod_SS_partialmort_1c, mod_SS_partialmort_2c, mod_SS_partialmort_5c, mod_SS_partialmort_6c) 
+#of these, model 1c has lowest AIC
+
+AIC(mod_SS_partialmort_1d, mod_SS_partialmort_2d, mod_SS_partialmort_5d, mod_SS_partialmort_6d) 
+#of these, model 5d has lowest AIC
+```
+  
+And now to evaluate residuals of models...
+
+```{r, eval = FALSE, echo=FALSE, warning=FALSE}
+# Residuals vs. Fitted Plots
+op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
+
+resid_SSa <- resid(mod_SS_partialmort_1a)
+fitted_SSa <- fitted(mod_SS_partialmort_1a)
+plot(fitted_SSc, resid_SSc, main = "A: Hedges_d ~ mg_d_L, S = Var_d,
+     random =  ~ mg_d_L | Comparison")
+abline(0,0)
+
+resid_SSd <- resid(mod_SS_partialmort_5b)
+fitted_SSd <- fitted(mod_SS_partialmort_5b)
+plot(fitted_SSd, resid_SSd, main = "B: smd ~ mg_d_L, control=addSlist,
+     random =  ~ mg_d_L | Comparison")
+abline(0,0)
+
+resid_SSc <- resid(mod_SS_partialmort_1c)
+fitted_SSc <- fitted(mod_SS_partialmort_1c)
+plot(fitted_SSc, resid_SSc, main = "C: Hedges_d ~ mg_L, S = Var_d,
+     random =  ~ mg_L | Comparison")
+abline(0,0)
+
+resid_SSd <- resid(mod_SS_partialmort_5d)
+fitted_SSd <- fitted(mod_SS_partialmort_5d)
+plot(fitted_SSd, resid_SSd, main = "D: smd ~ mg_L, control=addSlist,
+     random =  ~ mg_L | Comparison")
+abline(0,0)
+
+par(op)
+
+
+# Normal Q-Q Plot
+op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
+qqnorm(resid_SSa)
+qqline(resid_SSa)
+qqnorm(resid_SSb)
+qqline(resid_SSb)
+qqnorm(resid_SSc)
+qqline(resid_SSc)
+qqnorm(resid_SSd)
+qqline(resid_SSd)
+par(op)
+
+
+# Patterns:
+# 1.  Looks like could beneift from log transformation and perhaps non-linear modeling.
+# 2.  Let's try log transformation on those.
+```
+  
+Now let's check out a log, base 10 transformation of sediment exposure to see if it improves the residuals of the models.
+  
+```{r, echo=FALSE, warning=FALSE}
+#?mixmeta
+
+# Organizational Note: 
+#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
+#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
+#All models with 'a' or 'c' at the end of its name have manually calculated Hedges' d as its response.
+#All models with 'b' or 'd' at the end of its name have covar.smd calculated Hedges' d as its response.
+
+log10_mg_d_L <- log10(ES_SS_partialmort2$Sed_exposure_mg_d_L)
+log10_mg_L <- log10(ES_SS_partialmort2$Sed_level_standardized)
+
+# LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+log_mod_SS_partialmort_1a <- mixmeta(Hedges_d ~ log10_mg_d_L, S = Var_d,
+                       random =  ~ log10_mg_d_L | Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+log_mod_SS_partialmort_1b <- mixmeta(smd ~ log10_mg_d_L, S = vmd,
+                      random =  ~ log10_mg_d_L | Comparison,
+                      data = ES_SS_partialmort2, method = "ml")
+log_mod_SS_partialmort_1c <- mixmeta(Hedges_d ~ log10_mg_L, S = Var_d,
+                       random =  ~ log10_mg_L | Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+log_mod_SS_partialmort_1d <- mixmeta(smd ~ log10_mg_L, S = vmd,
+                      random =  ~ log10_mg_L | Comparison,
+                      data = ES_SS_partialmort2, method = "ml")
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+log_mod_SS_partialmort_2a <- mixmeta(Hedges_d ~ log10_mg_d_L, S = Var_d,
+                       random =  ~ log10_mg_d_L | Ref/Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+log_mod_SS_partialmort_2b <- mixmeta(smd ~ log10_mg_d_L, S = vmd,
+                      random =  ~ log10_mg_d_L | Ref/Comparison,
+                      data = ES_SS_partialmort2, method = "ml")
+log_mod_SS_partialmort_2c <- mixmeta(Hedges_d ~ log10_mg_L, S = Var_d,
+                       random =  ~ log10_mg_L | Ref/Comparison,
+                       data = ES_SS_partialmort2, method = "ml")
+log_mod_SS_partialmort_2d <- mixmeta(smd ~ log10_mg_L, S = vmd,
+                      random =  ~ log10_mg_L | Ref/Comparison,
+                      data = ES_SS_partialmort2, method = "ml")
+```
+
+To account for within-comparison correlations in the mixmeta model, I replace the 'S' argument with a 'control' argument, which requires me to provide the covariance matrices, as done with the covar.smd function. 
+
+```{r, echo=FALSE, warning=FALSE}
+# COMPUTE THE WITHIN-COMPARISON CORRELATIONS 
+# already done above but code repeated here...
+#covar_SS_partialmort <- by(ES_SS_partialmort, ES_SS_partialmort$Comparison, function(x) 
+#  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
+
+# LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON CORRELATIONS
+#Code for covariance matrix to include for addSlist for Comparison random effect
+newlist_log_PMOR <- list(NA)
+for (i in seq(1,length(covar_SS_partialmort))) {
+newlist_log_PMOR[i] <- list(covar_SS_partialmort[[i]]$S)
+}
+log_mod_SS_partialmort_5a <- mixmeta(Hedges_d ~ log10_mg_d_L,
+                       random = ~ log10_mg_d_L | Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR))
+log_mod_SS_partialmort_5b <- mixmeta(smd ~ log10_mg_d_L,
+                       random = ~ log10_mg_d_L | Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR))
+log_mod_SS_partialmort_5c <- mixmeta(Hedges_d ~ log10_mg_L,
+                       random = ~ log10_mg_L | Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR))
+log_mod_SS_partialmort_5d <- mixmeta(smd ~ log10_mg_L,
+                       random = ~ log10_mg_L | Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR))
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
+#Code for covariance matrix to include for addSlist for Ref/Comparison
+newlist_log_PMOR2 <- list(NA) #collects the list of covariance matrices for the block diag matrix by reference for the nested hierarchial ref/comparison
+templist_log_PMOR <- list(NA) #holds temp list of covariance matrices associated with each reference
+templist_log_PMOR2 <-list(NA)
+reflista <- ES_SS_partialmort %>% distinct(Ref,Ref_name,Comparison)
+reflist <- reflista[,1]
+for (i in seq(1,length(unique(reflista$Ref))))  {
+  #pull the elements from covar_SS_partialmort that are all from the same reference [i]
+  templist_log_PMOR[i] <-list(covar_SS_partialmort[reflist==unique(reflista$Ref)[i]])
+  for (j in seq(1,length(templist_log_PMOR[[i]]))) {
+  #for each comparison in the reference, pull out the covar matrices (element $S) and put in into templist_log_PMOR2
+     templist_log_PMOR2[j] <- list(templist_log_PMOR[[i]][[j]]$S)
+  }
+  #turn list of covars from all comparison in one reference into block diag matrix
+  newlist_log_PMOR2[i] <- list(bdiagMat(templist_log_PMOR2))
+  templist_log_PMOR2 <- list(NA)
+}
+log_mod_SS_partialmort_6a <- mixmeta(Hedges_d ~ log10_mg_d_L,
+                       random = ~ log10_mg_d_L | Ref/Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR2))
+log_mod_SS_partialmort_6b <- mixmeta(smd ~ log10_mg_d_L,
+                       random = ~ log10_mg_d_L | Ref/Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR2))
+log_mod_SS_partialmort_6c <- mixmeta(Hedges_d ~ log10_mg_L,
+                       random = ~ log10_mg_L | Ref/Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR2))
+log_mod_SS_partialmort_6d <- mixmeta(smd ~ log10_mg_L,
+                       random = ~ log10_mg_L | Ref/Comparison,
+                       data=ES_SS_partialmort2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_log_PMOR2))
+```
+  
+### 3. Model Comparison and Summary
+And now to compare relative fit of log-linear models...
+
+```{r, echo=FALSE, warning=FALSE}
+# Model Comparisons
+AIC(log_mod_SS_partialmort_1a, log_mod_SS_partialmort_2a, log_mod_SS_partialmort_5a, log_mod_SS_partialmort_6a)
+#of these, model 1a has lowest AIC
+
+AIC(log_mod_SS_partialmort_1b, log_mod_SS_partialmort_2b, log_mod_SS_partialmort_5b, log_mod_SS_partialmort_6b) 
+#of these, model 5b has lowest AIC
+
+AIC(log_mod_SS_partialmort_1c, log_mod_SS_partialmort_2c, log_mod_SS_partialmort_5c, log_mod_SS_partialmort_6c) 
+#of these, model 1c has lowest AIC
+
+AIC(log_mod_SS_partialmort_1d, log_mod_SS_partialmort_2d, log_mod_SS_partialmort_5d, log_mod_SS_partialmort_6d) 
+#of these, model 5d has lowest AIC
+```
+  
+And now to evaluate residuals of models...
+
+```{r, echo=FALSE, warning=FALSE}
+# Residuals vs. Fitted Plots
+op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
+
+resid_log_SSa <- resid(log_mod_SS_partialmort_1a)
+fitted_log_SSa <- fitted(log_mod_SS_partialmort_1a)
+plot(fitted_log_SSa, resid_log_SSa, main = "A: Hedges_d ~ log_mg_d_L, S=Var_d,
+     random =  ~ log_mg_d_L | Comparison")
+abline(0,0)
+
+resid_log_SSb <- resid(log_mod_SS_partialmort_5b)
+fitted_log_SSb <- fitted(log_mod_SS_partialmort_5b)
+plot(fitted_log_SSb, resid_log_SSb, main = "B: smd ~ log_mg_d_L, control=addSlist,
+     random =  ~ log_mg_d_L | Comparison")
+abline(0,0)
+
+resid_log_SSc <- resid(log_mod_SS_partialmort_1c)
+fitted_log_SSc <- fitted(log_mod_SS_partialmort_1c)
+plot(fitted_log_SSc, resid_log_SSc, main = "C: Hedges_d ~ log_mg_L, S=Var_d,
+     random =  ~ log_mg_L | Comparison")
+abline(0,0)
+
+resid_log_SSd <- resid(log_mod_SS_partialmort_5d)
+fitted_log_SSd <- fitted(log_mod_SS_partialmort_5d)
+plot(fitted_log_SSd, resid_log_SSd, main = "D: smd ~ log_mg_L, control=addSlist,
+     random =  ~ log_mg_L | Comparison")
+abline(0,0)
+
+par(op)
+
+
+# Normal Q-Q Plot
+op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
+qqnorm(resid_log_SSa)
+qqline(resid_log_SSa)
+qqnorm(resid_log_SSb)
+qqline(resid_log_SSb)
+qqnorm(resid_log_SSc)
+qqline(resid_log_SSc)
+qqnorm(resid_log_SSd)
+qqline(resid_log_SSd)
+par(op)
+
+
+# Patterns:
+# 1.  A is much better along fitted values axis but others mostly the same. Don't think non-linear models will improve this.
+```
+  
+### 4. Best-Fit Model Summary
+  
+#### i. MG x DAY/L IS PREDICTOR, Model using manual calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(log_mod_SS_partialmort_1a)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(log_mod_SS_partialmort_1a, newdata=data.frame(Sed_exposure_mg_d_L=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_log_mod_SS_partialmort_1a <- predict(log_mod_SS_partialmort_1a, newdata=ES_SS_partialmort2, ci=TRUE)
+ES_SS_partialmort2_CI <- cbind(ES_SS_partialmort2, pred_log_mod_SS_partialmort_1a)
+#head(ES_SS_partialmort2_CI)
+min_exp_SSa <- ES_SS_partialmort2_CI %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_exp_SSa=min(Sed_exposure_mg_d_L))
+min_exp_SSa2 <- as.numeric(min_exp_SSa)
+
+ggplot(ES_SS_partialmort2_CI, 
+       aes(x = Sed_exposure_mg_d_L,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  labs(x = "Sediment exposure concentration (mg/L)",
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_exp_SSa2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_exposure_mg_d_L, y = Hedges_d,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_exposure_mg_d_L, y = fit), inherit.aes=FALSE) +
+  theme_classic()
+```
+
+#### ii. MG x DAY/L IS PREDICTOR, Model using dosresmeta calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(mod_SS_partialmort_5b)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(mod_SS_partialmort_5b, newdata=data.frame(Sed_exposure_mg_d_L=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_mod_SS_partialmort_5b <- predict(mod_SS_partialmort_5b, newdata=ES_SS_partialmort2, ci=TRUE)
+ES_SS_partialmort2_CI2 <- cbind(ES_SS_partialmort2, pred_mod_SS_partialmort_5b)
+#head(ES_SS_partialmort2_CI2)
+min_exp_SSb <- ES_SS_partialmort2_CI %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_exp_SSb=min(Sed_exposure_mg_d_L))
+min_exp_SSb2 <- as.numeric(min_exp_SSb)
+
+ggplot(ES_SS_partialmort2_CI2, 
+       aes(x = Sed_exposure_mg_d_L,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  labs(x = "Sediment cumulative exposure (mg x day/L)",
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_exp_SSa2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_exposure_mg_d_L, y = smd,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_exposure_mg_d_L, y = fit), inherit.aes=FALSE) +
+  theme_classic()
+```
+  
+#### iii. MG/L IS PREDICTOR, Model using manual calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(mod_SS_partialmort_1c)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(mod_SS_partialmort_1c, newdata=data.frame(Sed_level_standardized=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_mod_SS_partialmort_1c <- predict(mod_SS_partialmort_1c, newdata=ES_SS_partialmort2, ci=TRUE)
+ES_SS_partialmort2_CI3 <- cbind(ES_SS_partialmort2, pred_mod_SS_partialmort_1c)
+#head(ES_SS_partialmort2_CI3)
+min_conc_SSc <- ES_SS_partialmort2_CI3 %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_conc_SSc=min(Sed_level_standardized))
+min_conc_SSc2 <- as.numeric(min_conc_SSc)
+
+ggplot(ES_SS_partialmort2_CI3, 
+       aes(x = Sed_level_standardized,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  labs(x = "Sediment exposure concentration (mg/L)",
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_conc_SSc2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_level_standardized, y = Hedges_d,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_level_standardized, y = fit), inherit.aes=FALSE) +
+  theme_classic() +
+  scale_x_continuous(limits=c(20,100))
+```
+
+#### iv. MG/L IS PREDICTOR, Model using dosresmeta calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(mod_SS_partialmort_5d)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(mod_SS_partialmort_5d, newdata=data.frame(Sed_level_standardized=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_mod_SS_partialmort_5d <- predict(mod_SS_partialmort_5d, newdata=ES_SS_partialmort2, ci=TRUE)
+ES_SS_partialmort2_CI4 <- cbind(ES_SS_partialmort2, pred_mod_SS_partialmort_5d)
+#head(ES_SS_partialmort2_CI4)
+min_conc_SSd <- ES_SS_partialmort2_CI3 %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_conc_SSd=min(Sed_level_standardized))
+min_conc_SSd2 <- as.numeric(min_conc_SSd)
+
+ggplot(ES_SS_partialmort2_CI4, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  labs(x = "Sediment exposure concentration (mg/L)",
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_conc_SSc2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_level_standardized, y = smd,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_level_standardized, y = fit), inherit.aes=FALSE) +
+  theme_classic() +
+  scale_x_continuous(limits=c(20,100))
+```
