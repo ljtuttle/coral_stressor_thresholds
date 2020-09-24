@@ -1,0 +1,583 @@
+---
+title: "Effects of sediment on the recruit survival of juvenile corals"
+author: "Lillian J. Tuttle"
+date: "7/17/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(mixmeta)
+library(dosresmeta)
+library(splines)
+
+#will want to getwd() and setwd(), as appropriate
+effectsize <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/effectsize2.csv", header=T)
+
+#keyboard shortcuts to remember: 
+#command-option-I inserts new code chunk
+#command-shift-M inserts pipeline symbols
+#command-enter runs line of code where cursor is (or highlighted portion)
+```
+  
+```{r, echo=FALSE, warning=FALSE}
+#Looking at data
+#head(effectsize) 
+
+#a lot of variables (columns) are factors instead of numeric/doubles/integers
+effectsize <- effectsize %>% #converting appropriate columns to numeric...
+  mutate_at(vars(ES, Hedges_d, Var_d, SE_d, CI_lo_d, CI_up_d, Sed_level_standardized, Sed_exposure, Sed_exposure_mg_d_L), as.character) %>% 
+  mutate_at(vars(ES, Hedges_d, Var_d, SE_d, CI_lo_d, CI_up_d, Sed_level_standardized, Sed_exposure, Sed_exposure_mg_d_L), as.numeric)
+#head(effectsize) #"double"-check!
+
+#Now create a new variable that has both Genus and species, remove sediment burial experiments, and remove irrelevant rows (non-controls, -treatments, or -baselines)
+effectsize <- effectsize %>%
+  mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
+  filter(Binary_sed_burial=="0") %>%
+  filter(!Control=="-1")
+#head(effectsize)
+
+#Separate into deposited sediment (DS) and suspended sediment (SS) datasets, WITH CONTROLS
+ES_DS <- effectsize %>% filter(DS_SS=="DS")
+ES_SS <- effectsize %>% filter(DS_SS=="SS")
+
+#Second dataset that that removes controls (Control == c("1","2"))
+effectsize2 <- effectsize %>% filter(Control=="0")
+#effectsize2 #"double"-check!
+
+#Separate into deposited sediment (DS) and suspended sediment (SS) datasets, WITHOUT CONTROLS
+ES_DS2 <- effectsize2 %>% filter(DS_SS=="DS")
+ES_SS2 <- effectsize2 %>% filter(DS_SS=="SS")
+
+#Now separate into independent dataset for each coral response for DEPOSITED SEDIMENT
+ES_DS_recruit <- ES_DS %>% 
+  filter(Response == "recruitment") %>% 
+  filter(Surface_direction == "top")
+#ES_DS_recruit %>% tally()
+#ES_DS_recruit %>% count(Ref)
+#ES_DS_recruit %>% count(Ref_name)
+#ES_DS_recruit %>% count(Gsp)
+#ES_DS_recruit %>% count(Updated_Genus)
+``` 
+  
+These datasets contain information from multiple articles (**Ref_name**) and studies/experiments (**Ref**) within those articles about the effects of DEPOSITED sediment on the **recruit survival rate** of juvenile corals. I would like to explore the dose-response relationship between sediment 'dose' and the effect size, estimated here as the standardized mean difference between treatment and control, in terms of Hedges' *d*:
+
+- Hedges' *d* is the standardized mean difference between the treatment and control groups (Hedges and Olkin 1985). Each study may have multiple Hedges' *d* calculations, one for each treatment-control comparison at each time-point.   
+
+- 'Dose' can be quantified as sediment exposure concentration (mg/cm^2^/day), exposure duration (days), or as "cumulative exposure", for which I multiply concentration and duration (mg/cm^2^).
+
+Each study/experiment (Ref) may contain multiple sets of controls and treatments (due to using multiple species or sediment types, for instance). Thus, I have added two categorical vectors, '**Comparison**' and 'Control', which group each set of control-treatment comparisons into a unique two-letter code, within which is one control (Control=="1") and at least one treatment (Control=="0"). **Therefore, 'Comparison' is nested within 'Ref', which is further nested within 'Ref_name'.**
+
+```{r, echo=FALSE}
+#Using dosresmeta to calculate Hedges' d and variance of d
+covar_DS_recruit <- by(ES_DS_recruit, ES_DS_recruit$Comparison, function(x) 
+  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
+ES_DS_recruit$smd <- unlist(lapply(covar_DS_recruit, function(x) x$y))
+ES_DS_recruit$vmd <- unlist(lapply(covar_DS_recruit, function(x) x$v))
+
+#Looking at data to make sure smd and vmd added as columns
+#ES_DS_recruit
+
+#Removing controls for modeling
+ES_DS_recruit2 <- subset(ES_DS_recruit, Control=="0")
+
+#Looking at data to make sure controls were removed
+#ES_DS_recruit2
+ES_DS_recruit2 %>% tally()
+``` 
+  
+# I. Recruit Survival Rate  
+
+## A. Deposited Sediment  
+  
+### 1. Plots  
+I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to cumulative exposure. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
+
+```{r, echo=FALSE, warning=FALSE}
+#CUMULATIVE EXPOSURE vs. effect size, by study
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_recruit2, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  ggtitle("Recruit survival rate") +
+  labs(x = "Sediment cumulative exposure (mg/cm2)",
+       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_continuous(limits = c(0,1500))
+#Using dosresmeta's calculation of Hedges' d and variance of d
+ggplot(ES_DS_recruit2, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Recruit survival rate") +
+  labs(x = "Sediment cumulative exposure (mg/cm2)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() +
+  scale_x_continuous(limits = c(0,1500))
+
+#EXPOSURE CONCENTRATION vs. effect size, by study
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_recruit2, 
+       aes(x = Sed_level_standardized,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  ggtitle("Recruit survival rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() 
+#Using dosresmeta's calculation of Hedges' d and variance of d
+ggplot(ES_DS_recruit2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Recruit survival rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic() 
+
+
+#EXPOSURE CONCENTRATION vs. effect size, by SEDIMENT TYPE
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_recruit2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Sed_grain_category,
+           shape = Sed_source,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Recruit survival rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Sediment relative\ngrain size",
+       shape = "Sediment source") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic()
+ggplot(ES_DS_recruit2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Sed_grain_class,
+           shape = Sed_mineralogy,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Recruit survival rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Sediment\ngrain class",
+       shape = "Sediment mineralogy") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic()
+
+#EXPOSURE CONCENTRATION vs. effect size, by PHYLOGENY
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_recruit2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Gsp,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Recruit survival rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Species") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic()
+
+#EXPOSURE CONCENTRATION vs. effect size, by OCEAN and REGION
+#Using previously calculated Hedges' d and variance of d
+ggplot(ES_DS_recruit2, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Region,
+           shape = Ocean,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  ggtitle("Recruit survival rate") +
+  labs(x = "Sediment exposure concentration (mg/cm2/day)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
+       color = "Region",
+       shape = "Ocean") +
+  geom_abline(intercept=0, slope=0) +
+  theme_classic()
+```
+  
+It is interesting that there is a difference between how I calculated Hedges' *d* and how *dosresmeta* appears to calculate it. But in both cases, there does not appear to be an effect of sediment exposure on effect size, except for *Acropora hyacinthus*, for which there appears to be a strong effect of sediment on effect size. There is not a discernible effect of geography (ocean and region) because almost all of the data were from the Marianas Islands. I still need to investigate the effects of sediment type (source, origin, grain size).
+  
+### 2. Model Fitting 
+The following set of functions model fixed and random (nested) effects WITHOUT accounting for within-comparison (or within-study) correlations. The output for each is a univariate, random-effects meta-regression.
+
+```{r, echo=FALSE, warning=FALSE}
+#?mixmeta
+
+# Organizational Note: 
+#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
+#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
+#All models with 'a' or 'c' at the end of its name have manually calculated Hedges' d as its response.
+#All models with 'b' or 'd' at the end of its name have covar.smd calculated Hedges' d as its response.
+
+# LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+mod_DS_recruit_1a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2, S = Var_d,
+                       random =  ~ Sed_exposure_mg_cm2 | Comparison,
+                       data = ES_DS_recruit2, method = "ml")
+mod_DS_recruit_1b <- mixmeta(smd ~ Sed_exposure_mg_cm2, S = vmd,
+                      random =  ~ Sed_exposure_mg_cm2 | Comparison,
+                      data = ES_DS_recruit2, method = "ml")
+mod_DS_recruit_1c <- mixmeta(Hedges_d ~ Sed_level_standardized, S = Var_d,
+                       random =  ~ Sed_level_standardized | Comparison,
+                       data = ES_DS_recruit2, method = "ml")
+mod_DS_recruit_1d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
+                      random =  ~ Sed_level_standardized | Comparison,
+                      data = ES_DS_recruit2, method = "ml")
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
+mod_DS_recruit_2a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2, S = Var_d,
+                       random =  ~ Sed_exposure_mg_cm2 | Ref/Comparison,
+                       data = ES_DS_recruit2, method = "ml")
+mod_DS_recruit_2b <- mixmeta(smd ~ Sed_exposure_mg_cm2, S = vmd,
+                      random =  ~ Sed_exposure_mg_cm2 | Ref/Comparison,
+                      data = ES_DS_recruit2, method = "ml")
+mod_DS_recruit_2c <- mixmeta(Hedges_d ~ Sed_level_standardized, S = Var_d,
+                       random =  ~ Sed_level_standardized | Ref/Comparison,
+                       data = ES_DS_recruit2, method = "ml")
+mod_DS_recruit_2d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
+                      random =  ~ Sed_level_standardized | Ref/Comparison,
+                      data = ES_DS_recruit2, method = "ml")
+```
+
+To account for within-comparison correlations in the mixmeta model, I replace the 'S' argument with a 'control' argument, which requires me to provide the covariance matrices, as done with the covar.smd function. 
+
+```{r, echo=FALSE, warning=FALSE}
+# COMPUTE THE WITHIN-COMPARISON CORRELATIONS 
+# already done above but code repeated here...
+#covar_DS_recruit <- by(ES_DS_recruit, ES_DS_recruit$Comparison, function(x) 
+#  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
+
+# LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON CORRELATIONS
+#Code for covariance matrix to include for addSlist for Comparison random effect
+newlist_REC <- list(NA)
+for (i in seq(1,length(covar_DS_recruit))) {
+newlist_REC[i] <- list(covar_DS_recruit[[i]]$S)
+}
+#Models with the Hedges' d I calculated (5a) and the one calculated by the package (5b)
+mod_DS_recruit_5a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2,
+                       random = ~ Sed_exposure_mg_cm2 | Comparison,
+                       data=ES_DS_recruit2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_REC))
+mod_DS_recruit_5b <- mixmeta(smd ~ Sed_exposure_mg_cm2,
+                       random = ~ Sed_exposure_mg_cm2 | Comparison,
+                       data=ES_DS_recruit2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_REC))
+mod_DS_recruit_5c <- mixmeta(Hedges_d ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Comparison,
+                       data=ES_DS_recruit2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_REC))
+mod_DS_recruit_5d <- mixmeta(smd ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Comparison,
+                       data=ES_DS_recruit2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_REC))
+
+
+# LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
+#Code for covariance matrix to include for addSlist for Ref/Comparison
+newlist_REC2 <- list(NA) #collects the list of covariance matrices for the block diag matrix by reference for the nested hierarchial ref/comparison
+templist_REC <- list(NA) #holds temp list of covariance matrices associated with each reference
+templist_REC2 <-list(NA)
+reflista <- ES_DS_recruit %>% distinct(Ref,Ref_name,Comparison)
+reflist <- reflista[,1]
+for (i in seq(1,length(unique(reflista$Ref))))  {
+  #pull the elements from covar_DS_recruit that are all from the same reference [i]
+  templist_REC[i] <-list(covar_DS_recruit[reflist==unique(reflista$Ref)[i]])
+  for (j in seq(1,length(templist_REC[[i]]))) {
+  #for each comparison in the reference, pull out the covar matrices (element $S) and put in into templist_REC2
+     templist_REC2[j] <- list(templist_REC[[i]][[j]]$S)
+  }
+  #turn list of covars from all comparison in one reference into block diag matrix
+  newlist_REC2[i] <- list(bdiagMat(templist_REC2))
+  templist_REC2 <- list(NA)
+}
+#Models with the Hedges' d I calculated (6a) and the one calculated by the package (6b)
+mod_DS_recruit_6a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2,
+                       random = ~ Sed_exposure_mg_cm2 | Ref/Comparison,
+                       data=ES_DS_recruit2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_REC2))
+mod_DS_recruit_6b <- mixmeta(smd ~ Sed_exposure_mg_cm2,
+                       random = ~ Sed_exposure_mg_cm2 | Ref/Comparison,
+                       data=ES_DS_recruit2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_REC2))
+mod_DS_recruit_6c <- mixmeta(Hedges_d ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Ref/Comparison,
+                       data=ES_DS_recruit2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_REC2))
+mod_DS_recruit_6d <- mixmeta(smd ~ Sed_level_standardized,
+                       random = ~ Sed_level_standardized | Ref/Comparison,
+                       data=ES_DS_recruit2, method="ml", #using dataset without controls
+                       control=list(addSlist=newlist_REC2))
+```
+  
+And now to compare relative fit of linear models...
+
+```{r, echo=FALSE, warning=FALSE}
+# Model Comparisons
+AIC(mod_DS_recruit_1a, mod_DS_recruit_2a, mod_DS_recruit_5a, mod_DS_recruit_6a) 
+#of these, model 5a has lowest AIC
+
+AIC(mod_DS_recruit_1b, mod_DS_recruit_2b, mod_DS_recruit_5b, mod_DS_recruit_6b) 
+#of these, model 5b has lowest AIC
+
+AIC(mod_DS_recruit_1c, mod_DS_recruit_2c, mod_DS_recruit_5c, mod_DS_recruit_6c) 
+#of these, model 5c has lowest AIC
+
+AIC(mod_DS_recruit_1d, mod_DS_recruit_2d, mod_DS_recruit_5d, mod_DS_recruit_6d) 
+#of these, model 5d has lowest AIC
+```
+  
+And now to evaluate residuals of models...
+
+```{r, echo=FALSE, warning=FALSE}
+# Residuals vs. Fitted Plots
+op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
+
+resid_a <- resid(mod_DS_recruit_5a)
+fitted_a <- fitted(mod_DS_recruit_5a)
+plot(fitted_a, resid_a, main = "A: Hedges_d ~ mg_cm2, control = addSlist,
+     random =  ~ mg_cm2 | Comparison")
+abline(0,0)
+#mod_DS_recruit_1a and mod_DS_recruit_3a were within 2 AIC
+
+resid_b <- resid(mod_DS_recruit_5b)
+fitted_b <- fitted(mod_DS_recruit_5b)
+plot(fitted_b, resid_b, main = "B: smd ~ mg_cm2, control = addSlist,
+     random =  ~ mg_cm2 | Comparison")
+abline(0,0)
+#mod_DS_recruit_6b within 1 AIC
+
+resid_c <- resid(mod_DS_recruit_5c)
+fitted_c <- fitted(mod_DS_recruit_5c)
+plot(fitted_c, resid_c, main = "C: Hedges_d ~ mg_cm2_d, control = addSlist,
+     random =  ~ mg_cm2_d | Comparison")
+abline(0,0)
+#mod_DS_recruit_2c within 0.3 AIC
+
+resid_d <- resid(mod_DS_recruit_5d)
+fitted_d <- fitted(mod_DS_recruit_5d)
+plot(fitted_d, resid_d, main = "D: smd ~ mg_cm2_d, control = addSlist,
+     random =  ~ mg_cm2_d | Comparison")
+abline(0,0)
+
+par(op)
+
+
+# Normal Q-Q Plot
+op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
+qqnorm(resid_a)
+qqline(resid_a)
+qqnorm(resid_b)
+qqline(resid_b)
+qqnorm(resid_c)
+qqline(resid_c)
+qqnorm(resid_d)
+qqline(resid_d)
+par(op)
+
+
+# Patterns:
+# 1.  Residuals for models A and B (mg/cm2 predictor) are very similar, with reasonable magnitudes (<abs(3)).
+# 2.  Residuals for models C and D (mg/cm2/day predictor) are very similar, with reasonable magnitudes (<abs(3)), but a lot of "clumping" along fitted values axis bc they're all from same exposure concentration in single study.
+# 3.  No obvious need to try out log or non-linear models!
+```
+  
+### 3. Best-Fit Model Summary
+  
+#### i. MG/CM2 IS PREDICTOR, Model using manual calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(mod_DS_recruit_5a)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(mod_DS_recruit_5a, newdata=data.frame(Sed_exposure_mg_cm2=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_mod_DS_recruit_5a <- predict(mod_DS_recruit_5a, newdata=ES_DS_recruit2, ci=TRUE)
+ES_DS_recruit2_CI <- cbind(ES_DS_recruit2, pred_mod_DS_recruit_5a)
+#head(ES_DS_recruit2_CI)
+min_exp_a <- ES_DS_recruit2_CI %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_exp_a=min(Sed_exposure_mg_cm2))
+min_exp_a2 <- as.numeric(min_exp_a)
+
+ggplot(ES_DS_recruit2_CI, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*")"),
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_exp_a2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_exposure_mg_cm2, y = Hedges_d,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_exposure_mg_cm2, y = fit), inherit.aes=FALSE) +
+  theme_classic() +
+  scale_x_continuous(limits = c(0,1500), breaks=c(0,500,1000,1500,min_exp_a2), 
+                label=c("0","500","1000","1500",round(min_exp_a2,digits=1)))
+```
+  
+#### ii. MG/CM2 IS PREDICTOR, Model using dosresmeta calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(mod_DS_recruit_5b)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(mod_DS_recruit_5b, newdata=data.frame(Sed_exposure_mg_cm2=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_mod_DS_recruit_5b <- predict(mod_DS_recruit_5b, newdata=ES_DS_recruit2, ci=TRUE)
+ES_DS_recruit2_CI2 <- cbind(ES_DS_recruit2, pred_mod_DS_recruit_5b)
+#head(ES_DS_recruit2_CI2)
+min_exp_b <- ES_DS_recruit2_CI2 %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_exp_b=min(Sed_exposure_mg_cm2))
+min_exp_b2 <- as.numeric(min_exp_b)
+
+ggplot(ES_DS_recruit2_CI2, 
+       aes(x = Sed_exposure_mg_cm2,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*")"),
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_exp_b2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_exposure_mg_cm2, y = smd,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_exposure_mg_cm2, y = fit), inherit.aes=FALSE) +
+  theme_classic() +
+  scale_x_continuous(limits = c(0,1500), breaks=c(0,500,1000,1500,min_exp_b2), 
+                label=c("0","500","1000","1500",round(min_exp_b2,digits=1)))
+```
+  
+There is no significant relationship between cumulative exposure to deposited sediment and the Hedges' d effect size for coral recruit survival rate (DRMA z = -1.833, p = 0.067), after accounting for variability by comparison (Fig. X, Table X).
+  
+#### iii. MG/CM2/DAY IS PREDICTOR, Model using manual calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(mod_DS_recruit_5c)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(mod_DS_recruit_5c, newdata=data.frame(Sed_level_standardized=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_mod_DS_recruit_5c <- predict(mod_DS_recruit_5c, newdata=ES_DS_recruit2, ci=TRUE)
+ES_DS_recruit2_CI3 <- cbind(ES_DS_recruit2, pred_mod_DS_recruit_5c)
+#head(ES_DS_recruit2_CI3)
+min_conc_c <- ES_DS_recruit2_CI3 %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_conc_c=min(Sed_level_standardized))
+min_conc_c2 <- as.numeric(min_conc_c)
+
+ggplot(ES_DS_recruit2_CI3, 
+       aes(x = Sed_level_standardized,
+           y = Hedges_d,
+           color = Ref,
+           ymin = Hedges_d-Var_d,
+           ymax = Hedges_d+Var_d)) + 
+  geom_pointrange() +
+  labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"),
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_conc_c2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_level_standardized, y = Hedges_d,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_level_standardized, y = fit), inherit.aes=FALSE) +
+  theme_classic() +
+  scale_x_continuous(limits = c(0,40), breaks=c(0,10,20,30,40,min_conc_c2), 
+                label=c("0","10","20","30","40",round(min_conc_c2,digits=1)))
+```
+  
+#### iv. MG/CM2/DAY IS PREDICTOR, Model using dosresmeta calculation of Hedges' *d*
+Now I will predict the effect size along the exposure range and plot with confidence intervals.  
+
+```{r, echo=FALSE, warning=FALSE}
+summary(mod_DS_recruit_5d)
+
+# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
+#predict(mod_DS_recruit_5d, newdata=data.frame(Sed_level_standardized=13.2), ci=TRUE)
+
+# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
+pred_mod_DS_recruit_5d <- predict(mod_DS_recruit_5d, newdata=ES_DS_recruit2, ci=TRUE)
+ES_DS_recruit2_CI4 <- cbind(ES_DS_recruit2, pred_mod_DS_recruit_5d)
+#head(ES_DS_recruit2_CI4)
+min_conc_d <- ES_DS_recruit2_CI4 %>% 
+  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
+  filter(overlap0==FALSE) %>% 
+  summarize(min_conc_d=min(Sed_level_standardized))
+min_conc_d2 <- as.numeric(min_conc_d)
+
+ggplot(ES_DS_recruit2_CI4, 
+       aes(x = Sed_level_standardized,
+           y = smd,
+           color = Ref,
+           ymin = smd-vmd,
+           ymax = smd+vmd)) + 
+  geom_pointrange() +
+  labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"),
+       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
+       color = "Study") +
+  geom_abline(intercept=0, slope=0) +
+  geom_vline(xintercept=min_conc_d2, linetype="dashed", color = "red") +
+  geom_ribbon(aes(x = Sed_level_standardized, y = smd,
+                  ymin = ci.lb, ymax = ci.ub), 
+              fill = "grey70", alpha = .15, 
+              show.legend=FALSE, inherit.aes=FALSE) +
+  geom_line(aes(x = Sed_level_standardized, y = fit), inherit.aes=FALSE) +
+  theme_classic() +
+  scale_x_continuous(limits = c(0,40), breaks=c(0,10,20,30,40,min_conc_d2), 
+                label=c("0","10","20","30","40",round(min_conc_d2,digits=1)))
+```
+  
+For every 1-unit increase in exposure concentration of deposited sediment, the Hedges' d effect size for coral recruit survival rate declined by 0.02 (95% CI -0.04, 0.00; DRMA z = -2.2410, p = 0.025), after accounting for variability by comparison (Fig. X, Table X). However, the best-fit model’s I2 statistic was 47.1%, indicating some residual heterogeneity unaccounted for by the model (Table X), which could be the result of taxonomic, geographic, and/or mineralogical differences among (and within) studies.
+  

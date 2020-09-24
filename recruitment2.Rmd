@@ -1,0 +1,698 @@
+---
+title: "Effects of sediment on recruitment of juvenile corals"
+author: "Lillian J. Tuttle"
+date: "6/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(lme4)
+library(pROC)
+library(effects)
+library(lattice)
+library(MuMIn)
+recruitment<-read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/recruitment/recruitment2.csv", header=T)
+binarySS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/binary/binarySS.csv", header=T)
+
+#keyboard shortcuts to remember: 
+#command-option-I inserts new code chunk
+#command-shift-M inserts pipeline symbols
+#command-enter runs line of code where cursor is (or highlighted portion)
+```
+
+#### Here I will explore how DEPOSITED AND SUSPENDED sediment affects the RECRUITMENT of tropical, scleractinean coral JUVENILES. The database to be used is comprised of data extracted from studies deemed relevant during the systematic literature review process.
+
+# The Dataset
+  
+## Deposited Sediment 
+Specifically, we will explore the results of 138 datapoints from 3 studies conducted in 1 ocean on 4 species within 2 genera.
+
+```{r, echo=FALSE, warning=FALSE}
+#head(recruitment)
+recruitment <- recruitment %>%
+  mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_"))
+recruitment %>% tally() #n=138 datapoints, tally() returns same result as count(recruitment)
+recruitment %>% count(Ref, sort=T) #n=3 studies
+recruitment %>% count(Ref_name, sort=T) #n=3 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
+recruitment %>% count(Ocean, sort=T) #n=1 ocean
+recruitment %>% count(Gsp, sort=T) #n=4 species
+recruitment %>% count(Updated_Genus, sort=T) #n=2 genera
+```
+  
+## Suspended Sediment 
+Specifically, we will explore the results of 12 datapoints from 1 study conducted in 1 ocean on 3 species within 2 genera.
+
+```{r, echo=FALSE, warning=FALSE}
+#head(recruitSS)
+recruitmentSS <- binarySS %>%
+  mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
+  filter(Coral_age_class=="juvenile") %>% #only juv corals
+  filter(!is.na(Binary_death_total))
+recruitmentSS %>% tally() #n=12 datapoints, tally() returns same result as count(recruitmentSS)
+recruitmentSS %>% count(Ref, sort=T) #n=1 study
+recruitmentSS %>% count(Ref_name, sort=T) #n=1 study, count(Ref_name) = group_by(Ref_name) %>% tally()
+recruitmentSS %>% count(Ocean, sort=T) #n=1 ocean
+recruitmentSS %>% count(Gsp, sort=T) #n=3 species
+recruitmentSS %>% count(Updated_Genus, sort=T) #n=2 genera
+```
+  
+  
+# Exploratory plots
+
+First let's explore all data from all species for which there is binary data about the presence of 'recruit mortality' as a result of exposure to deposited sediment.  
+
+##### DEFINITIONS:  
+* '**Recruit mortality**' is the death of a juvenile coral, after it has settled to the reef surface, but before it has reached adult size/reproductive status.
+
+```{r, echo=FALSE, warning=FALSE}
+#DEPOSITED SEDIMENT
+#recruit mortality, plotted by exposure concentration (x) and exposure duration (y)
+recruit <- recruitment %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_mg_cm2_d, Binary_effect_recruit_mortality, Binary_recruit_death, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Sed_days, Sed_origin, Sed_grain_class, Resp_level, Surface_direction, Coral_age_at_start_expt_days_since_settled) %>% 
+  filter(!is.na(Binary_effect_recruit_mortality)) %>% #remove NAs (studies that did not describe recruit mortality) 
+  filter(Surface_direction=="top") #for top-facing surfaces only
+#recruit %>% tally() #n=132 datapoints, tally() returns same result as count(recruit)
+#recruit %>% count(Ref, sort=T) #n=3 studies
+#recruit %>% count(Ref_name, sort=T) #n=3 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
+#recruit %>% count(Gsp, sort=T) #n=4 species
+#recruit %>% count(Updated_Genus, sort=T) #n=2 genera, Leptastrea n=99, Acropora n=33
+#head(recruit)
+
+#response is % of coral larvae recruited (survival):
+recruit_plot1 <- ggplot(data = recruit) +
+  geom_point(mapping = aes(
+    x = Sed_level_mg_cm2_d, 
+    y = Resp_level,
+    color = Gsp,
+    size = Coral_age_at_start_expt_days_since_settled)) +
+  labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"),
+       y = "Recruit survival (%)",
+       color = "Species",
+       size = "Age when exposed to sediment\n(days-post-settlement)") + 
+  theme_bw() #A. millepora has very low survival rates -- only study (Babcock and Smith 2000) of the batch that was conducted in field and lasted for 8 months, so very different from other studies. Also had only two datapoints for control and treatment for top surfaces and corals started at 0 days post-settlement when first experienced stressor.
+
+#looking at species' binary responses:
+recruit_plot2 <- ggplot(data = recruit, mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Binary_effect_recruit_mortality,
+      color = Gsp,
+      size = Coral_age_at_start_expt_days_since_settled)) +
+    geom_point() +
+    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"),
+         y = "Recruit mortality due\nto sediment? (0/1)",
+         color = "Species",
+         size = "Age when exposed to sediment\n(days-post-settlement)") +
+    theme_bw()
+
+recruit_plot3 <- ggplot(data=recruit, mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Sed_days,
+      color = factor(Binary_effect_recruit_mortality),
+      shape = factor(Binary_effect_recruit_mortality),
+      position = "jitter",
+      text = Gsp)) +
+    geom_point(data = subset(recruit, Binary_effect_recruit_mortality=="0")) + 
+    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
+         y = "Exposure duration (days)") +
+    scale_x_continuous(limits = c(0,40)) +
+    scale_y_log10(limits = c(0.1,250), breaks=c(0.1,1,10,100), 
+                  label=c("0.1","1","10","100")) +
+    scale_color_manual(name = "Recruit mortality\ndue to sediment?",
+                       values = c("blue", "red"),
+                       breaks = c("0","1"), labels = c("no", "yes")) +
+    scale_shape_manual(name = "Recruit mortality\ndue to sediment?",
+                       values = c(16,15),
+                       breaks = c("0","1"), labels = c("no", "yes")) +
+    theme_bw()
+
+
+#SUSPENDED SEDIMENT
+#recruit mortality, plotted by exposure concentration (x) and exposure duration (y)
+recruitSS <- recruitmentSS %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_mg_L, Binary_death_total, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Coral_age_at_start_expt_days_since_settled)
+#recruitSS %>% tally() #n=12 datapoints, tally() returns same result as count(recruit)
+#recruitSS %>% count(Ref, sort=T) #n=1 studies
+#recruitSS %>% count(Ref_name, sort=T) #n=1 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
+#recruitSS %>% count(Gsp, sort=T) #n=4 species
+#recruitSS %>% count(Updated_Genus, sort=T) #n=2 genera
+#head(recruit)
+
+recruitSS_plot2 <- ggplot(data = recruitSS, mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_death_total,
+      color = Gsp)) +
+    geom_point() +
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Juvenile mortality due\nto suspended sediment? (0/1)",
+         color = "Species") +
+    scale_x_continuous(limits = c(0,100)) +
+    theme_bw()
+
+recruitSS_plot3 <- ggplot(data=recruitSS, mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Sed_exposure_days,
+      color = factor(Binary_death_total),
+      shape = factor(Binary_death_total),
+      position = "jitter",
+      text = Gsp)) +
+    geom_point(data = subset(recruitSS, Binary_death_total=="0")) + 
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Exposure duration (days)") +
+    scale_x_continuous(limits = c(0,100)) +
+    scale_y_continuous(limits = c(1,40)) +
+    scale_color_manual(name = "Recruit mortality\ndue to sediment?",
+                       values = c("blue", "red"),
+                       breaks = c("0","1"), labels = c("no", "yes")) +
+    scale_shape_manual(name = "Recruit mortality\ndue to sediment?",
+                       values = c(16,15),
+                       breaks = c("0","1"), labels = c("no", "yes")) +
+    theme_bw()
+
+
+#PLOTS:
+recruit_plot1 + labs(title = "Recruit survival rate with Deposited Sediment", 
+                     subtitle = "n = 132 datapoints, n = 3 studies from 3 articles, n = 3 spp. from 2 genera")
+
+recruit_plot2 + labs(title = "Recruit mortality with Deposited Sediment", 
+        subtitle = "n = 132 datapoints, n = 3 studies from 3 articles, n = 3 spp. from 2 genera")
+recruitSS_plot2 + labs(title = "Recruit mortality with Suspended Sediment", 
+                       subtitle = "n = 12 datapoints, n = 1 study, n = 3 spp. from 2 genera")
+
+recruit_plot3 + geom_point(data = subset(recruit, Binary_effect_recruit_mortality=="1")) +
+  labs(title = "Recruit Mortality from Deposited Sediment", 
+       subtitle = "n = 132 datapoints, n = 3 studies from 3 articles, n = 3 spp. from 2 genera")
+recruitSS_plot3 + geom_point(data = subset(recruitSS, Binary_death_total=="1")) +
+  labs(title = "Recruit Mortality from Suspended Sediment", 
+       subtitle = "n = 12 datapoints, n = 1 study, n = 3 spp. from 2 genera")
+```
+  
+  
+### Exploring the same plots with PLOTLY...  
+
+##### Recruit mortality, All species, n=132 datapoints, n=3 studies, n=2 genera
+**Legend**: Recruit mortality due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
+```{r, echo=FALSE, warning=FALSE}
+recruit_plot4 <- ggplot(data=recruit) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Sed_days,
+      shape = factor(Binary_effect_recruit_mortality),
+      color = Gsp,
+      size = Coral_age_at_start_expt_days_since_settled,
+      position = "jitter")) + 
+    labs(x = "Sedimentation rate (mg/cm2/d)", 
+         y = "Exposure duration (days)",
+         shape = "Recruit mortality due\nto sedimentation?",
+         color = "Species",
+         size = "Age when exposed to sediment\n(days-post-settlement)") +
+    scale_y_log10(limits = c(0.1,250), breaks=c(0.1,1,10,100), 
+                  label=c("0.1","1","10","100")) +
+    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
+    theme_bw()
+recruit_plotly <- ggplotly(recruit_plot4)
+recruit_plotly #plot where I can hover over points and get species, but legend cut-off
+```
+  
+  
+# Threshold Analyses with Binary Data 
+Now let's calculate thresholds based on the binary data explored above.  
+
+##### DEFINITIONS:  
+* '**LOAEL**', or the 'lowest observed adverse effect level' is defined as the lowest dose at which there was an observed adverse effect.  
+* '**NOAEL**', or the 'no observed adverse effect level' is defined as the highest dose at which there was NOT an observed adverse effect.  
+* '**Adverse effect**' is defined here as any response of a coral individual, colony, or experimental treatment group that *may* negatively affect the coral’s fitness and/or survival. These adverse effects may include sublethal physiological changes (e.g., significantly reduced growth or photosynthetic rates when compared to coral in ambient/control conditions), bleaching/tissue loss, and mortality.  This definition of adverse effect is independent of its magnitude, so while the affect may have potentially reduced fitness, its magnitude may be sufficiently small that the fitness effect is not measureable.  
+ 
+  
+## DEPOSITED SEDIMENT 
+### NOAEL/LOAEL defined by exposure concentration  
+```{r, echo=FALSE, warning=FALSE}
+#Setting up for LOAEL by filtering for adverse effects (binary=1)
+adverse_recruit <- recruit %>% 
+  filter(Binary_effect_recruit_mortality=="1") %>%
+  arrange(Sed_level_mg_cm2_d)
+
+#LOAEL
+summarize(adverse_recruit, LOAEL=min(Sed_level_mg_cm2_d)) #LOAEL is 8.3 and comes from Moeller et al. (2017): Acropora hyacinthus, 2 days post settlement at start of experiment, with 21 days of exposure to sediment level
+loaelDS <- adverse_recruit %>% summarize(min(Sed_level_mg_cm2_d))
+loaelDS <- as.numeric(loaelDS)
+
+#Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
+non_adverse_recruit <- recruit %>%
+  filter(Binary_effect_recruit_mortality=="0") %>%
+  arrange(desc(Sed_level_mg_cm2_d)) %>%
+  filter(Sed_level_mg_cm2_d<=8.3) #less than or equal to the LOAEL, which = 8.3
+
+#NOAEL = maximum sediment level with no adverse effect
+summarize(non_adverse_recruit, NOAEL=max(Sed_level_mg_cm2_d)) #NOAEL is 8.3
+
+#PLOT
+recruit_plot2 + annotate("rect", xmin=8.3, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2)
+
+recruit_plot5 <- ggplot(data = recruit) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Binary_effect_recruit_mortality,
+      color = Gsp)) +
+    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
+         y = "Recruit mortality due\nto sedimentation? (0/1)",
+         color = "Species") +
+    theme_bw()
+
+recruit_plot5 + annotate("rect", xmin=8.3, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2) +
+  labs(title = "Recruit mortality from Deposited Sediment", 
+       subtitle = "n = 132 datapoints, n = 3 studies from 3 articles, n = 3 spp. from 2 genera", 
+       caption = "LOAEL concentration = 8.3\nNOAEL concentration = 8.3")
+```
+   
+###NOAEL/LOAEL defined by exposure duration  
+```{r, echo=FALSE, warning=FALSE}
+#Setting up for LOAEL by filtering for adverse effects (binary=1)
+adverse_recruit2 <- recruit %>% 
+  filter(Binary_effect_recruit_mortality=="1") %>% 
+  filter(!is.na(Sed_days)) %>% 
+  arrange(Sed_days)
+
+#LOAEL
+summarize(adverse_recruit2, LOAEL=min(Sed_days)) #LOAEL is 3 days from Moeller et al. (2017): Leptastrea purpurea, 33.3 mg/cm2/d, 2 days-post-settlement when monitored for recruitment
+
+#Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
+non_adverse_recruit2 <- recruit %>%
+  filter(Binary_effect_recruit_mortality=="0") %>%
+  filter(Sed_days<=3) #less than or equal to the LOAEL, which = 3
+
+#NOAEL = maximum sediment level with no adverse effect
+summarize(non_adverse_recruit2, NOAEL=max(Sed_days)) #NOAEL is 3 days
+
+#PLOT LOAELs
+recruit_plot3 + geom_point(data = subset(recruit, Binary_effect_recruit_mortality=="1")) +
+  labs(title = "Recruit mortality from Deposited Sediment", 
+       subtitle = "n = 132 datapoints, n = 3 studies from 3 articles, n = 3 spp. from 2 genera",
+       caption = "LOAEL concentration = 8.3, duration = 3 d\nNOAEL concentration = 8.3, duration =  3 d\nShaded box represents 'risky' exposure area") + 
+  annotate("rect", xmin=8.3, xmax=Inf, ymin=3, ymax=Inf, fill = "red", alpha=0.2)
+
+recruit_plot3 + geom_point(data = subset(recruit, Binary_effect_recruit_mortality=="1")) +
+  labs(caption = "LOAEL concentration = 8.3, duration = 3 d\nNOAEL concentration = 8.3, duration =  3 d\nShaded box represents 'risky' exposure area\nn = 132 datapoints, n = 3 studies from 3 articles, n = 3 spp. from 2 genera") + 
+  annotate("rect", xmin=8.3, xmax=Inf, ymin=3, ymax=Inf, fill = "red", alpha=0.2)
+```
+  
+  
+## SUSPENDED SEDIMENT 
+### NOAEL/LOAEL defined by exposure concentration  
+```{r, echo=FALSE, warning=FALSE}
+#Setting up for LOAEL by filtering for adverse effects (binary=1)
+adverse_recruitSS <- recruitSS %>% 
+  filter(Binary_death_total=="1") %>%
+  arrange(Sed_level_mg_L)
+
+#LOAEL
+summarize(adverse_recruitSS, LOAEL=min(Sed_level_mg_L)) #LOAEL is 100 and comes from Humanes et al. (2017a): Acropora millepora, with 40 days of exposure
+loaelSS <- adverse_recruitSS %>% summarize(min(Sed_level_mg_L))
+loaelSS <- as.numeric(loaelSS)
+
+#Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
+non_adverse_recruitSS <- recruitSS %>%
+  filter(Binary_death_total=="0") %>%
+  arrange(desc(Sed_level_mg_L)) %>%
+  filter(Sed_level_mg_L<=100) #less than or equal to the LOAEL, which = 100
+
+#NOAEL = maximum sediment level with no adverse effect
+summarize(non_adverse_recruitSS, NOAEL=max(Sed_level_mg_L)) #NOAEL is 100
+
+#PLOT
+recruitSS_plot2 + annotate("rect", xmin=100, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2) +
+  labs(title = "Recruit mortality from suspended sediment", 
+       subtitle = "n=12 datapoints, n=1 study, n=2 genera", 
+       caption = "LOAEL concentration = 100\nNOAEL concentration = 100")
+
+recruitSS_plot2 + annotate("rect", xmin=100, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2)
+```
+   
+###NOAEL/LOAEL defined by exposure duration  
+```{r, echo=FALSE, warning=FALSE}
+#Setting up for LOAEL by filtering for adverse effects (binary=1)
+adverse_recruitSS2 <- recruitSS %>% 
+  filter(Binary_death_total=="1") %>% 
+  filter(!is.na(Sed_exposure_days)) %>% 
+  arrange(Sed_exposure_days)
+
+#LOAEL
+summarize(adverse_recruitSS2, LOAEL=min(Sed_exposure_days)) #LOAEL is 40 days comes from Humanes et al. (2017a): Acropora millepora, with 100 mg/L
+
+#Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
+non_adverse_recruitSS2 <- recruitSS %>%
+  filter(Binary_death_total=="0") %>%
+  filter(Sed_exposure_days<=40) #less than or equal to the LOAEL, which = 40
+
+#NOAEL = maximum sediment level with no adverse effect
+summarize(non_adverse_recruitSS2, NOAEL=max(Sed_exposure_days)) #NOAEL is 40 days
+
+#PLOT LOAELs
+recruitSS_plot3 + geom_point(data = subset(recruitSS, Binary_death_total=="1")) +
+  labs(title = "Recruit survival rate with Suspended Sediment", 
+       subtitle = "n = 12 datapoints, n = 1 study, n = 3 spp. from 2 genera",
+       caption = "LOAEL concentration = 100, duration = 40 d\nNOAEL concentration = 100, duration =  40 d\nShaded box represents 'risky' exposure area") + 
+  annotate("rect", xmin=100, xmax=Inf, ymin=40, ymax=Inf, fill = "red", alpha=0.2)
+
+recruitSS_plot3 + geom_point(data = subset(recruitSS, Binary_death_total=="1")) +
+  labs(caption = "LOAEL concentration = 100, duration = 40 d\nNOAEL concentration = 100, duration =  40 d\nShaded box represents 'risky' exposure area\nn = 12 datapoints, n = 1 study, n = 3 spp. from 2 genera") + 
+  annotate("rect", xmin=100, xmax=Inf, ymin=40, ymax=Inf, fill = "red", alpha=0.2)
+```
+  
+  
+# Logistic Regression Model Fitting  
+## Deposited Sediment
+```{r, echo=FALSE, warning=FALSE}
+#Let's add a log transformation of sediment level, in case it's needed
+recruitDS2 <- recruit %>% 
+  mutate(log10_conc=log10(Sed_level_mg_cm2_d)) %>% 
+  mutate(log10_dur=log10(Sed_days)) %>% 
+  filter(Control_code=="0")
+recruitDS2 %>% tally()
+
+#Models with fixed effect(s) only
+modDS1 <- glm(Binary_recruit_death ~ Sed_level_mg_cm2_d, 
+            family = binomial(link = "logit"), data = recruitDS2)
+modDS2 <- glm(Binary_recruit_death ~ Sed_level_mg_cm2_d + Sed_days, 
+            family = binomial(link = "logit"), data = recruitDS2)
+modDS3 <- glm(Binary_recruit_death ~ Sed_level_mg_cm2_d*Sed_days, 
+            family = binomial(link = "logit"), data = recruitDS2)
+modDS1b <- glm(Binary_recruit_death ~ Sed_level_mg_cm2_d + Coral_age_at_start_expt_days_since_settled, 
+            family = binomial(link = "logit"), data = recruitDS2)
+modDS2b <- glm(Binary_recruit_death ~ 
+                 Sed_level_mg_cm2_d + Sed_days + Coral_age_at_start_expt_days_since_settled, 
+            family = binomial(link = "logit"), data = recruitDS2)
+modDS3b <- glm(Binary_recruit_death ~ Sed_level_mg_cm2_d*Sed_days + Coral_age_at_start_expt_days_since_settled, 
+            family = binomial(link = "logit"), data = recruitDS2)
+AIC(modDS1b,modDS2b,modDS3b,modDS1,modDS2,modDS3) #keep coral age as predictor!
+
+#Models with random effect for coral species or study
+modDS4 <- glmer(Binary_recruit_death ~ 
+                  Sed_level_mg_cm2_d + Coral_age_at_start_expt_days_since_settled + 
+                  (1 | Gsp), 
+              family = binomial, data = recruitDS2)
+modDS5 <- glmer(Binary_recruit_death ~ 
+                  Sed_level_mg_cm2_d + Sed_days + Coral_age_at_start_expt_days_since_settled + 
+                  (1 | Gsp), 
+              family = binomial, data = recruitDS2)
+modDS6 <- glmer(Binary_recruit_death ~ 
+                  Sed_level_mg_cm2_d*Sed_days + Coral_age_at_start_expt_days_since_settled + 
+                  (1 | Gsp), 
+              family = binomial, data = recruitDS2)
+modDS7 <- glmer(Binary_recruit_death ~ 
+                  Sed_level_mg_cm2_d + Coral_age_at_start_expt_days_since_settled + 
+                  (1 | Ref), 
+              family = binomial, data = recruitDS2)
+modDS8 <- glmer(Binary_recruit_death ~ 
+                  Sed_level_mg_cm2_d + Sed_days + Coral_age_at_start_expt_days_since_settled + 
+                  (1 | Ref), 
+              family = binomial, data = recruitDS2)
+modDS9 <- glmer(Binary_recruit_death ~ 
+                  Sed_level_mg_cm2_d*Sed_days + Coral_age_at_start_expt_days_since_settled + 
+                  (1 | Ref), 
+              family = binomial, data = recruitDS2)
+modDS10 <- glmer(Binary_recruit_death ~ 
+                   Sed_level_mg_cm2_d + Coral_age_at_start_expt_days_since_settled + 
+                   (1 | Gsp) + (1 | Ref), 
+              family = binomial, data = recruitDS2)
+modDS11 <- glmer(Binary_recruit_death ~ 
+                Sed_level_mg_cm2_d + Sed_days + Coral_age_at_start_expt_days_since_settled + 
+                  (1 | Gsp) + (1 | Ref), 
+              family = binomial, data = recruitDS2)
+modDS12 <- glmer(Binary_recruit_death ~ 
+                Sed_level_mg_cm2_d*Sed_days + Coral_age_at_start_expt_days_since_settled + 
+                  (1 | Gsp) + (1 | Ref), 
+              family = binomial, data = recruitDS2)
+
+#Model comparison and summary
+anova(modDS6,modDS9,modDS12) #compare full fixed effects models -- mod6 or 9 is best
+anova(modDS7,modDS8,modDS9) #No evidence against reduced model (mod7)
+anova(modDS4,modDS7,modDS10) #compare reduced fixed effects models -- mod7 is best
+print(summary(modDS7), correlation=FALSE) #boundary (singular) fit: see ?isSingular
+AIC(modDS1b,modDS7)
+print(summary(modDS1b), correlation=FALSE)
+```
+  
+### Effect estimates  
+```{r, echo=FALSE, warning=FALSE}
+##Diagnostics
+#predicted probabilities, converted to 0 or 1 respectively:
+p <- as.numeric(predict(modDS1b, type="response")>0.5)
+#proportion correct:
+mean(p==recruitDS2$Binary_recruit_death) #[1] 0.8850575
+#predicted-vs-observed table:
+table(p,recruitDS2$Binary_recruit_death)
+#ROC and area under the curve:
+pred_modDS1b <- predict(modDS1b, newdata = recruitDS2, type = "response")
+auc(roc(recruitDS2$Binary_recruit_death, pred_modDS1b)) #AUC: 0.9275
+#can also check out 'performance' package https://cran.r-project.org/web/packages/performance/performance.pdf
+r.squaredGLMM(modDS1b) #The fixed effect of sediment level explains ~0.3% of variation of the total variation. If the random intercepts for studies are also included, then 55.8% of variation is explained.
+
+#https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
+#Generally, each k-fold increase in x is associated with a change in the odds by a multiplicative factor of k^(Beta). For instance, k=2 for a doubling of x and k=0.5 for a halving of x is associated with a change in the odds of success by a factor of k^(Beta).
+#If predictor is log-transformed:
+#"Case 1: k=e, i.e. natural log transformed independent variable. Then if Beta is close to zero we can say "a 1% increase in x leads to a Beta percent increase in the odds of the outcome.""
+#"Case 2: base k transformed independent variable: Then the exponentiated coefficient, exp(Beta), can be interpreted as the proportionate increase in the odds from a k-fold increase in the independent variable." -- For k=10, exp(Beta) is the multiplicative change in the odds of success with a 10-fold increase in X1 (with X2 fixed, if relevant).
+
+#Model was non-significant, but suggestive
+se <- sqrt(diag(vcov(modDS1b)))
+tab <- cbind(Est = coef(modDS1b), 
+             LL = coef(modDS1b) - 1.96 * se, 
+             UL = coef(modDS1b) + 1.96 * se)
+2^(tab)
+```
+    
+There is suggestive, but non-significant, evidence to suggest that for every doubling of exposure concentration of deposited sediment, the odds of recruit mortality increase by 1.06 times (95% CI 1.00, 1.12; GLMM z = 1.859, p = 0.063) after accounting for the age of the sediment-exposed coral.
+  
+### Prediction figure  
+```{r}
+#Overlaying glmm results on figure, but prediction line is jagged...
+pred_modDS1 <- predict(modDS1b, newdata=recruitDS2, type="response")
+recruitDS3 <- cbind(recruitDS2, pred_modDS1b)
+
+recruitDS_plot <- ggplot(data = recruitDS3) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Binary_recruit_death,
+      color = Ref,
+      size = Coral_age_at_start_expt_days_since_settled)) +
+    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
+         y = "Recruit mortality due to sediment exposure",
+         color = "Study",
+         size = "Age when exposed to sediment\n(days-post-settlement)") +
+    scale_x_continuous(limits=c(0,40)) +
+    geom_line(aes(x = Sed_level_mg_cm2_d, y = pred_modDS1b), inherit.aes=FALSE) +
+    theme_bw()
+
+recruitDS_plot
+```
+
+Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+  
+```{r}
+jvalues <- with(recruitDS2, seq(from = min(Sed_level_mg_cm2_d), to = max(Sed_level_mg_cm2_d), length.out = 100))
+
+# calculate predicted probabilities and store in a list
+pp <- lapply(jvalues, function(j) {
+    recruitDS2$Sed_level_mg_cm2_d <- j
+    predict(modDS1b, newdata = recruitDS2, type = "response")
+})
+
+# get the means with lower and upper quartiles
+plotdat <- t(sapply(pp, function(x) {
+    c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
+}))
+
+# add in Sed_level_mg_cm2_d values and convert to data frame
+plotdat <- as.data.frame(cbind(plotdat, jvalues))
+
+# better names and show the first few rows
+colnames(plotdat) <- c("PredictedProbability", "MedianProbability", 
+                       "LowerQuantile", "UpperQuantile", "Sed_conc")
+#head(plotdat)
+
+# plot average marginal predicted probabilities
+ggplot(plotdat, aes(x = Sed_conc)) + 
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) +
+  ylim(c(0, 1))
+ggplot(plotdat, aes(x = Sed_conc)) + 
+  geom_ribbon(aes(ymin = LowerQuantile, ymax = UpperQuantile), alpha = 0.15) +
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) + 
+  ylim(c(0, 1))
+
+#Overlaying average marginal predicted probabilities on figure
+#by Ref
+recruitDS_plot3 <- ggplot() +
+    geom_point(data = recruitDS2, mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Binary_recruit_death,
+      color = Ref)) +
+    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
+         y = "Predicted probability of recruit\nmortality due to sediment exposure",
+         color = "Binary Data\nby Study",
+         linetype = "Predicted\nProbability") +
+    scale_x_continuous(limits=c(0,40), breaks= c(0,10,20,30,40,loaelDS),
+                       labels= c("0","10","20","30","40",round(loaelDS, digits = 1))) +
+    geom_ribbon(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
+                                    ymin = LowerQuantile, ymax = UpperQuantile), 
+                alpha = 0.15) +
+    geom_line(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
+                                  linetype = "twodash")) +
+    geom_line(data = plotdat, aes(x = Sed_conc, y = MedianProbability, 
+                                  linetype = "solid")) +
+    geom_vline(xintercept=loaelDS, linetype="dashed", color = "red") +
+    theme_bw() +
+    scale_linetype_manual(values=c("twodash", "solid"), labels = c("Median","Mean"))
+
+recruitDS_plot3
+```
+  
+## Suspended Sediment
+```{r, echo=FALSE, warning=FALSE}
+#Let's add a log transformation of sediment level, in case it's needed
+recruitSS2 <- recruitSS %>% 
+  filter(Control_code=="0") %>% 
+  mutate(log10_conc=log10(Sed_level_mg_L)) %>% 
+  mutate(log10_dur=log10(Sed_exposure_days))
+recruitSS2 %>% tally()
+
+#Models with fixed effect(s) only
+modSS1 <- glm(Binary_death_total ~ Sed_level_mg_L, 
+            family = binomial(link = "logit"), data = recruitSS2)
+modSS1b <- glm(Binary_death_total ~ Sed_level_mg_L + Coral_age_at_start_expt_days_since_settled, 
+            family = binomial(link = "logit"), data = recruitSS2)
+
+#models with random effect for coral species (only one study)
+modSS2 <- glmer(Binary_death_total ~ Sed_level_mg_L + (1 | Gsp), 
+              family = binomial, data = recruitSS2)
+#singular
+modSS2b <- glmer(Binary_death_total ~ Sed_level_mg_L + Coral_age_at_start_expt_days_since_settled + 
+                  (1 | Gsp), 
+              family = binomial, data = recruitSS2)
+#Error in pwrssUpdate(pp, resp, tol = tolPwrss, GQmat = GQmat, compDev = compDev, : (maxstephalfit) PIRLS step-halvings failed to reduce deviance in pwrssUpdate
+
+#model comparison and summary
+AIC(modSS1,modSS1b,modSS2) #1 best
+print(summary(modSS1), correlation=FALSE) #no error
+```
+  
+### Effect estimates  
+```{r, echo=FALSE, warning=FALSE}
+##Diagnostics
+#predicted probabilities, converted to 0 or 1 respectively:
+p <- as.numeric(predict(modSS1, type="response")>0.5)
+#proportion correct:
+mean(p==recruitSS2$Binary_death_total) #[1] 0.8888889
+#predicted-vs-observed table:
+table(p,recruitSS2$Binary_death_total)
+#ROC and area under the curve:
+pred_modSS1 <- predict(modSS1, newdata = recruitSS2, type = "response")
+auc(roc(recruitSS2$Binary_death_total, pred_modSS1)) #AUC: 0.875
+#can also check out 'performance' package https://cran.r-project.org/web/packages/performance/performance.pdf
+r.squaredGLMM(modSS1) #The fixed effect of sediment level explains ~0.3% of variation of the total variation. If the random intercepts for studies are also included, then 55.8% of variation is explained.
+
+#https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
+#Generally, each k-fold increase in x is associated with a change in the odds by a multiplicative factor of k^(Beta). For instance, k=2 for a doubling of x and k=0.5 for a halving of x is associated with a change in the odds of success by a factor of k^(Beta).
+#If predictor is log-transformed:
+#"Case 1: k=e, i.e. natural log transformed independent variable. Then if Beta is close to zero we can say "a 1% increase in x leads to a Beta percent increase in the odds of the outcome.""
+#"Case 2: base k transformed independent variable: Then the exponentiated coefficient, exp(Beta), can be interpreted as the proportionate increase in the odds from a k-fold increase in the independent variable." -- For k=10, exp(Beta) is the multiplicative change in the odds of success with a 10-fold increase in X1 (with X2 fixed, if relevant).
+
+#Not significant
+#se <- sqrt(diag(vcov(modSS1)))
+#tab <- cbind(Est = fixef(modSS1), 
+#             LL = fixef(modSS1) - 1.96 * se, 
+#             UL = fixef(modSS1) + 1.96 * se)
+#2^(tab)
+```
+    
+There is no significant relationship between exposure concentration of suspended sediment and the odds of recruit mortality (GLMM z = 0.003, p = 0.998).
+  
+### Prediction figures  
+```{r}
+#Overlaying glmm results on figure, but prediction line is jagged...
+pred_modSS1 <- predict(modSS1, newdata=recruitSS2, type="response")
+recruitSS3 <- cbind(recruitSS2, pred_modSS1)
+
+recruitSS_plot <- ggplot(data = recruitSS3) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_death_total,
+      color = Gsp)) +
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Recruit mortality due to sediment exposure",
+         color = "Species") +
+    scale_x_continuous(limits=c(0,100)) +
+    geom_line(aes(x = Sed_level_mg_L, y = pred_modSS1), inherit.aes=FALSE) +
+    theme_bw()
+
+recruitSS_plot
+```
+  
+```{r}
+jvalues <- with(recruitSS2, seq(from = min(Sed_level_mg_L), to = max(Sed_level_mg_L), length.out = 100))
+
+# calculate predicted probabilities and store in a list
+pp <- lapply(jvalues, function(j) {
+    recruitSS2$Sed_level_mg_L <- j
+    predict(modSS1, newdata = recruitSS2, type = "response")
+})
+
+# get the means with lower and upper quartiles
+plotdat <- t(sapply(pp, function(x) {
+    c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
+}))
+
+# add in Sed_level_mg_L values and convert to data frame
+plotdat <- as.data.frame(cbind(plotdat, jvalues))
+
+# better names and show the first few rows
+colnames(plotdat) <- c("PredictedProbability", "MedianProbability", 
+                       "LowerQuantile", "UpperQuantile", "Sed_conc")
+#head(plotdat)
+
+# plot average marginal predicted probabilities
+ggplot(plotdat, aes(x = Sed_conc)) + 
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) +
+  ylim(c(0, 1))
+ggplot(plotdat, aes(x = Sed_conc)) + 
+  geom_ribbon(aes(ymin = LowerQuantile, ymax = UpperQuantile), alpha = 0.15) +
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) + 
+  ylim(c(0, 1))
+
+#Overlaying average marginal predicted probabilities on figure
+#by Ref
+recruitSS_plot2 <- ggplot() +
+    geom_point(data = recruitSS2, mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_death_total,
+      color = Ref)) +
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Predicted probability of recruit\nmortality due to sediment exposure",
+         color = "Binary Data\nby Study",
+         linetype = "Predicted\nProbability") +
+    scale_x_log10(limits=c(1,max(recruitSS2$Sed_level_mg_L)),
+                  breaks=c(0.01,0.1,1,10,100,1000,loaelSS),
+                  label=c("0.01","0.1","1","10","100","1000",round(loaelSS,digits=1))) +
+    geom_ribbon(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
+                                    ymin = LowerQuantile, ymax = UpperQuantile), 
+                alpha = 0.15) +
+    geom_line(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
+                                  linetype = "twodash")) +
+    geom_line(data = plotdat, aes(x = Sed_conc, y = MedianProbability, 
+                                  linetype = "solid")) +
+    geom_vline(xintercept=loaelSS, linetype="dashed", color = "red") +
+    theme_bw() +
+    scale_linetype_manual(values=c("twodash", "solid"), labels = c("Median","Mean"))
+
+recruitSS_plot2
+```

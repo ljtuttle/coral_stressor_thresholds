@@ -1,0 +1,966 @@
+---
+title: "Effects of sediment on the survival and settlement of larval corals"
+author: "Lillian J. Tuttle"
+date: "6/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(lme4)
+library(pROC)
+library(effects)
+library(lattice)
+library(MuMIn)
+settlement<-read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/settlement/settlement2.csv", header=T)
+larvaeSS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/settlement/larval_survival_settleSS.csv", header=T)
+
+#keyboard shortcuts to remember: 
+#command-option-I inserts new code chunk
+#command-shift-M inserts pipeline symbols
+#command-enter runs line of code where cursor is (or highlighted portion)
+```
+
+#### Here I will explore how (1) DEPOSITED AND (2) SUSPENDED sediment affects the SETTLEMENT and (3) SUSPENDED sediment affects the SURVIVAL of tropical, scleractinean coral LARVAE. The database to be used is comprised of data extracted from studies deemed relevant during the systematic literature review process.
+
+# The Dataset
+  
+## Deposited Sediment 
+Specifically, we will explore the results of 138 datapoints from 3 studies conducted in 1 ocean on 4 species within 2 genera.  
+
+```{r, echo=FALSE, warning=FALSE}
+#head(settlement)
+settlement <- settlement %>%
+  mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_"))
+settlement %>% tally() #n=178 datapoints, tally() returns same result as count(settlement)
+settlement %>% count(Ref, sort=T) #n=6 studies
+settlement %>% count(Ref_name, sort=T) #n=6 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
+settlement %>% count(Ocean, sort=T) #n=1 ocean (Pacific and "Indo-Pacific", which is Singapore)
+settlement %>% count(Gsp, sort=T) #n=2 species
+settlement %>% count(Updated_Genus, sort=T) #n=2 genera
+```
+  
+## Suspended Sediment  
+For **larval settlement**, we will explore the results of 30 datapoints from 7 studies conducted in 2 oceans on 4 species within 3 genera.  
+
+```{r, echo=FALSE, warning=FALSE}
+#SETTLEMENT
+#head(larvaeSS)
+settleSS <- larvaeSS %>%
+  mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
+  filter(Resp1_type=="Larval settlement rate")
+settleSS %>% tally() #n=30 datapoints, tally() returns same result as count(settleSS)
+settleSS %>% count(Ref, sort=T) #n=7 studies
+settleSS %>% count(Ref_name, sort=T) #n=4 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
+settleSS %>% count(Ocean, sort=T) #n=2 oceans
+settleSS %>% count(Gsp, sort=T) #n=4 species
+settleSS %>% count(Updated_Genus, sort=T) #n=3 genera
+```
+  
+For **larval survival**, we will explore the results of 50 datapoints from 4 studies conducted in 1 ocean on 4 species within 2 genera. 
+```{r, echo=FALSE, warning=FALSE}
+#LARVAL SURVIVAL
+survivalSS <- larvaeSS %>%
+  mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
+  filter(Resp1_type=="Larval survival rate")
+survivalSS %>% tally() #n=50 datapoints, tally() returns same result as count(survivalSS)
+survivalSS %>% count(Ref, sort=T) #n=4 studies
+survivalSS %>% count(Ref_name, sort=T) #n=3 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
+survivalSS %>% count(Ocean, sort=T) #n=1 ocean
+survivalSS %>% count(Gsp, sort=T) #n=4 species
+survivalSS %>% count(Updated_Genus, sort=T) #n=2 genera
+```
+  
+  
+# Exploratory plots
+
+First let's explore all data from all species for which there is data about 'limited settlement' and 'reduced larval survival' as a result of exposure to sediment.  
+
+##### DEFINITIONS:  
+* '**Limited settlement**' is defined as a reduction in the number of larval corals settling/attaching to a surface with sediment, as compared to surfaces without sediment (or "control" conditions).  
+* '**Reduced larval survival**' is defined as a reduction in the number of pre-settlement, larval corals that survive exposure to sediment, as compared to conditions without sediment (or "control" conditions). 
+
+```{r, echo=FALSE, warning=FALSE}
+#DEPOSITED SEDIMENT - Settlement
+#limited settlement, plotted by exposure concentration (x) and exposure duration (y)
+settle <- settlement %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_mg_cm2_d, Binary_effect_limited_settle, Updated_Genus, Gsp, Ocean, Sed_origin, Sed_grain_class, Resp_level, Surface_direction, Sed_application, Sed_exposure, Days_after_start) %>% 
+  filter(Surface_direction=="top") #for top-facing surfaces only
+#settle %>% tally() #n=132 datapoints, tally() returns same result as count(settle)
+settle %>% count(Ref, sort=T) #n=6 studies,
+settle %>% count(Ref_name, sort=T) #n=6 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
+#settle %>% count(Gsp, sort=T) #n=2 species, Pocillopora damicornis n=84, Acropora millepora n=48
+#settle %>% count(Updated_Genus, sort=T) #n=2 genera
+#head(settle)
+
+settle2 <- settle %>% filter(!is.na(Binary_effect_limited_settle)) #to remove regression studies that have no binary data
+#settle2 %>% tally() #n=54 datapoints
+settle2 %>% count(Ref, sort=T)
+settle2 %>% count(Ref_name, sort=T) #4 studies (same two species)
+
+#response is % of coral larvae recruited (survival):
+settle_plot1 <- ggplot(data = settle2) +
+  geom_point(mapping = aes(
+    x = Sed_level_mg_cm2_d, 
+    y = Resp_level,
+    color = Gsp,
+    shape = Sed_application)) +
+  labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
+       y = "Larval settlement rate (%)",
+       color = "Species",
+       shape = "Timing of sediment\napplication") + 
+  scale_x_continuous(trans='log10', 
+                     breaks=c(0.01,0.1,1,10,100,1000),
+                     label=c("0.01","0.1","1","10","100","1000")) +
+  scale_y_continuous(limits = c(0,100)) +
+  theme_bw()
+
+#looking at species' binary responses:
+settle_plot2 <- ggplot(data = settle2) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Binary_effect_limited_settle,
+      color = Gsp)) +
+    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"),  
+         y = "Limited larval settlement\ndue to sedimentation? (0/1)",
+         color = "Species") +
+    scale_x_continuous(trans='log10', 
+                     breaks=c(0.01,0.1,1,10,100,1000),
+                     label=c("0.01","0.1","1","10","100","1000")) +
+    scale_y_continuous(breaks=c(0,1)) +
+    theme_bw() +
+    scale_color_discrete(labels = c(expression(italic("Acropora millepora")),expression(italic("Pocillopora damicornis")))) + theme(legend.text.align = 0)
+
+settle_plot3 <- ggplot(data=settle2, mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Days_after_start,
+      color = Gsp,
+      shape = factor(Binary_effect_limited_settle),
+      position = "jitter")) +
+    geom_point(data = subset(settle2, Binary_effect_limited_settle=="0")) + 
+    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
+         y = "Days since beginning\nexperiment",
+         color = "Species",
+         shape = "Reduced larval settlement\ndue to sediment?") +
+    scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000),
+                  label=c("0.01","0.1","1","10","100","1000")) +
+    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
+    theme_bw()
+
+#SUSPENDED SEDIMENT - Settlement
+settleSS_plot1 <- ggplot(data = settleSS) +
+  geom_point(mapping = aes(
+    x = Sed_level_mg_L, 
+    y = Resp1_level,
+    color = Gsp)) +
+  labs(x = "Sediment exposure concentration (mg/L)", 
+       y = "Larval settlement rate (%)",
+       color = "Species") + 
+  scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000),
+                label=c("0.01","0.1","1","10","100","1000")) +
+  scale_y_continuous(limits = c(0,100)) +
+  theme_bw()
+
+settleSS_plot2 <- ggplot(data = settleSS) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_effect_limited_settlement,
+      color = Gsp)) +
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Reduced larval settlement\ndue to sediment? (0/1)",
+         color = "Species") +
+    scale_x_continuous(trans='log10', 
+                     breaks=c(0.01,0.1,1,10,100,1000),
+                     label=c("0.01","0.1","1","10","100","1000")) +
+    scale_y_continuous(breaks=c(0,1)) +
+    theme_bw() +
+    scale_color_discrete(labels = c(expression(italic("Acropora digitifera")),expression(italic("Acropora tenuis")),expression(italic("Pocillopora damicornis")),expression(italic("Porites astreoides")))) + theme(legend.text.align = 0)
+
+settleSS_plot3 <- ggplot(data=settleSS, mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Coral_age_at_end_expt_days,
+      color = Gsp,
+      shape = factor(Binary_effect_limited_settlement),
+      position = "jitter")) +
+    geom_point(data = subset(settleSS, Binary_effect_limited_settlement=="0")) + 
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Coral age when assessed for settlement\n(days since fertilization)",
+         color = "Species",
+         shape = "Reduced larval settlement\ndue to sediment?") +
+    scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000),
+                  label=c("0.01","0.1","1","10","100","1000")) +
+    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
+    theme_bw()
+
+
+#SUSPENDED SEDIMENT - Larval survival
+survivalSS_plot1 <- ggplot(data = survivalSS) +
+  geom_point(mapping = aes(
+    x = Sed_level_mg_L, 
+    y = Resp1_level,
+    color = Gsp)) +
+  labs(x = "Sediment exposure concentration (mg/L)", 
+       y = "Larval survival rate (%)",
+       color = "Species") + 
+  scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000),
+                label=c("0.01","0.1","1","10","100","1000")) +
+  scale_y_continuous(limits = c(0,100)) +
+  theme_bw()
+
+survivalSS_plot2 <- ggplot(data = survivalSS) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_effect_larval_mortality,
+      color = Gsp)) +
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Reduced larval survival due\nto suspended sediment? (0/1)",
+         color = "Species") +
+    scale_x_continuous(trans='log10', 
+                     breaks=c(0.01,0.1,1,10,100,1000),
+                     label=c("0.01","0.1","1","10","100","1000")) +
+    scale_y_continuous(breaks=c(0,1)) +
+    theme_bw() +
+    scale_color_discrete(labels = c(expression(italic("Acropora digitifera")),expression(italic("Acropora millepora")),expression(italic("Acropora tenuis")),expression(italic("Pocillopora acuta")))) + theme(legend.text.align = 0)
+
+survivalSS_plot3 <- ggplot(data=survivalSS, mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Coral_age_at_start_expt_days,
+      color = Gsp,
+      shape = factor(Binary_effect_larval_mortality),
+      position = "jitter")) +
+    geom_point(data = subset(survivalSS, Binary_effect_larval_mortality=="0")) + 
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Coral age when first exposed to suspended\nsediment (days since fertilization)",
+         color = "Species",
+         shape = "Reduced larval survival due\nto suspended sediment?") +
+    scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000),
+                  label=c("0.01","0.1","1","10","100","1000")) +
+    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
+    theme_bw()
+
+
+#PLOTS:
+settle_plot1 + labs(title = "Larval Settlement Rate and Deposited Sediment", 
+        subtitle = "n = 54 datapoints, n = 6 studies from 6 articles, n = 2 spp. from 2 genera")
+settleSS_plot1 + labs(title = "Larval Settlement Rate and Suspended Sediment", 
+        subtitle = "n = 30 datapoints, n = 7 studies from 4 articles, n = 4 spp. from 3 genera")
+
+settle_plot2 + labs(title = "Reduced Larval Settlement from Deposited Sediment", 
+        subtitle = "n = 54 datapoints, n = 6 studies from 6 articles, n = 2 spp. from 2 genera")
+settleSS_plot2 + labs(title = "Reduced Larval Settlement from Suspended Sediment", 
+        subtitle = "n = 30 datapoints, n = 7 studies from 4 articles, n = 4 spp. from 3 genera")
+
+settle_plot3 + geom_point(data = subset(settle2, Binary_effect_limited_settle=="1")) +
+  labs(title = "Reduced Larval Settlement from Deposited Sediment", 
+       subtitle = "n = 54 datapoints, n = 6 studies from 6 articles, n = 2 spp. from 2 genera")
+settleSS_plot3 + geom_point(data = subset(settleSS, Binary_effect_limited_settlement=="1")) +
+  labs(title = "Reduced Larval Settlement from Suspended Sediment", 
+       subtitle = "n = 30 datapoints, n = 7 studies from 4 articles, n = 4 spp. from 3 genera")
+
+survivalSS_plot1 + labs(title = "Larval Survival Rate and Suspended Sediment", 
+        subtitle = "n = 50 datapoints, n = 4 studies from 3 articles, n = 4 spp. from 2 genera")
+survivalSS_plot2 + labs(title = "Larval Mortality from Suspended Sediment", 
+        subtitle = "n = 50 datapoints, n = 4 studies from 3 articles, n = 4 spp. from 2 genera")
+survivalSS_plot3 + geom_point(data = subset(survivalSS, Binary_effect_larval_mortality=="1")) +
+  labs(title = "Larval Mortality from Suspended Sediment", 
+       subtitle = "n = 50 datapoints, n = 4 studies from 3 articles, n = 4 spp. from 2 genera")
+
+
+settleDS_plot4 <- ggplot(data = settle2) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Binary_effect_limited_settle,
+      color = Gsp, size = 3)) +
+    labs(x = "", y = "", color = "") +
+    scale_x_log10(limits=c(0.1,1000), breaks=c(0.01,0.1,1,10,100,1000),
+                  label=c("0.01","0.1","1","10","100","1000")) +
+    scale_y_continuous(breaks=c(0,1)) +
+    scale_color_discrete(labels = c("","","")) + 
+    guides(size = FALSE, color = guide_legend(override.aes = list(size=5))) +
+    theme_bw() +
+    theme(axis.text.x=element_text(size=rel(2)), 
+          axis.text.y=element_text(size=rel(2)),
+          legend.key.size = unit(4,"line"))
+
+settleSS_plot4 <- ggplot(data = settleSS) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_effect_limited_settlement,
+      color = Gsp, size = 3)) +
+    labs(x = "", y = "", color = "") +
+    scale_x_log10(limits=c(0.1,1000), breaks=c(0.01,0.1,1,10,100,1000),
+                  label=c("0.01","0.1","1","10","100","1000")) +
+    scale_y_continuous(breaks=c(0,1)) +
+    scale_color_discrete(labels = c("","","","")) + 
+    guides(size = FALSE, color = guide_legend(override.aes = list(size=5))) +
+    theme_bw() +
+    theme(axis.text.x=element_text(size=rel(2)), 
+          axis.text.y=element_text(size=rel(2)),
+          legend.key.size = unit(4,"line"))
+
+survivalSS_plot4 <- ggplot(data = survivalSS) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_effect_larval_mortality,
+      color = Gsp, size = 3)) +
+    labs(x = "", y = "", color = "") +
+    scale_x_log10(limits=c(0.1,1000), breaks=c(0.01,0.1,1,10,100,1000),
+                  label=c("0.01","0.1","1","10","100","1000")) +
+    scale_y_continuous(breaks=c(0,1)) +
+    scale_color_discrete(labels = c("","","","")) + 
+    guides(size = FALSE, color = guide_legend(override.aes = list(size=5))) +
+    theme_bw() +
+    theme(axis.text.x=element_text(size=rel(2)), 
+          axis.text.y=element_text(size=rel(2)),
+          legend.key.size = unit(4,"line"))
+```
+  
+  
+### Exploring the same plots with PLOTLY...  
+
+##### Limited settlement
+**Legend**: Limited due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
+  
+**Deposited sediment**: All species, n=54 datapoints, n=4 studies, n=2 genera
+```{r, echo=FALSE, warning=FALSE}
+#settle_plotly <- ggplotly(settle_plot3)
+#settle_plotly #plot where I can hover over points and get species, but legend cut-off
+```
+  
+**Suspended sediment**:   
+```{r, echo=FALSE, warning=FALSE}
+settleSS_plotly <- ggplotly(settleSS_plot3)
+settleSS_plotly #plot where I can hover over points and get species, but legend cut-off
+```
+  
+##### Larval mortality
+**Legend**: Larval mortality due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
+  
+**Suspended sediment**: 
+```{r, echo=FALSE, warning=FALSE}
+survival_plotly <- ggplotly(survivalSS_plot3)
+survival_plotly #plot where I can hover over points and get species, but legend cut-off
+```  
+  
+  
+# Threshold Analyses with Binary Data 
+Now let's calculate the thresholds, based on the binary data explored above.  
+
+##### DEFINITIONS:  
+* '**LOAEL**', or the 'lowest observed adverse effect level' is defined as the lowest dose at which there was an observed adverse effect.  
+* '**NOAEL**', or the 'no observed adverse effect level' is defined as the highest dose at which there was NOT an observed adverse effect.  
+* '**Adverse effect**' is defined here as any response of a coral individual, colony, or experimental treatment group that *may* negatively affect the coral’s fitness and/or survival. These adverse effects may include sublethal physiological changes (e.g., significantly reduced growth or photosynthetic rates when compared to coral in ambient/control conditions), bleaching/tissue loss, and mortality.  This definition of adverse effect is independent of its magnitude, so while the affect may have potentially reduced fitness, its magnitude may be sufficiently small that the fitness effect is not measureable.  
+  
+ 
+## DEPOSITED SEDIMENT
+### Limited settlement
+#### NOAEL/LOAEL defined by exposure concentration  
+```{r, echo=FALSE, warning=FALSE}
+#Setting up for LOAEL by filtering for adverse effects (binary=1)
+adverse_settle <- settle %>% 
+  filter(Binary_effect_limited_settle=="1") %>%
+  arrange(Sed_level_mg_cm2_d)
+
+#LOAEL
+summarize(adverse_settle, LOAEL=min(Sed_level_mg_cm2_d)) #LOAEL is 1 and comes from Ricardo et al. (2017): Acropora millepora, measured 1 day after start of experiment (sediment applied to surface before larvae added)
+loaelDS <- adverse_settle %>% summarize(min(Sed_level_mg_cm2_d))
+loaelDS <- as.numeric(loaelDS)
+
+#Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
+non_adverse_settle <- settle %>%
+  filter(Binary_effect_limited_settle=="0") %>%
+  arrange(desc(Sed_level_mg_cm2_d)) %>%
+  filter(Sed_level_mg_cm2_d<=1) #less than or equal to the LOAEL, which = 1
+
+#NOAEL = maximum sediment level with no adverse effect
+summarize(non_adverse_settle, NOAEL=max(Sed_level_mg_cm2_d)) #NOAEL is 1
+
+#PLOT
+settle_plot2 + annotate("rect", xmin=1, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2) +
+  labs(title = "Limited Settlement from Deposited Sediment", 
+       subtitle = "n = 54 datapoints, n = 6 studies from 6 articles, n = 2 spp. from 2 genera", 
+       caption = "LOAEL concentration = 1\nNOAEL concentration = 1")
+
+settle_plot2 + annotate("rect", xmin=1, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2) +
+  labs(caption = "LOAEL concentration = 1\nNOAEL concentration = 1\nn = 54 datapoints, n = 6 studies from 6 articles, n = 2 spp. from 2 genera")
+
+settleDS_plot4 + annotate("rect", xmin=1, xmax=Inf, 
+                          ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2)
+```
+     
+  
+## SUSPENDED SEDIMENT
+### Limited settlement
+#### NOAEL/LOAEL defined by exposure concentration
+```{r, echo=FALSE, warning=FALSE}
+#Setting up for LOAEL by filtering for adverse effects (binary=1)
+adverse_settleSS <- settleSS %>% 
+  filter(Binary_effect_limited_settlement=="1") %>%
+  arrange(Sed_level_mg_L)
+
+#LOAEL
+summarize(adverse_settleSS, LOAEL=min(Sed_level_mg_L)) #LOAEL is 57.79 and comes from Gilmour 1999: Acropora digitifera, 2 days of exposure between 6 and 8 days post-fertilization
+loaelSS1 <- adverse_settleSS %>% summarize(min(Sed_level_mg_L))
+loaelSS1 <- as.numeric(loaelSS1)
+
+#Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
+non_adverse_settleSS <- settleSS %>%
+  filter(Binary_effect_limited_settlement=="0") %>%
+  arrange(desc(Sed_level_mg_L)) %>%
+  filter(Sed_level_mg_L<=57.79) #less than or equal to the LOAEL, which = 57.79
+
+#NOAEL = maximum sediment level with no adverse effect
+summarize(non_adverse_settleSS, NOAEL=max(Sed_level_mg_L)) #NOAEL is 34.6
+
+#PLOT
+settleSS_plot2 + annotate("rect", xmin=57.79, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2) +
+  labs(title = "Limited Settlement from Suspended Sediment", 
+       subtitle = "n = 30 datapoints, n = 7 studies from 4 articles, n = 4 spp. from 3 genera", 
+       caption = "LOAEL concentration = 57.8\nNOAEL concentration = 34.6")
+
+settleSS_plot2 + annotate("rect", xmin=57.79, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2) +
+  labs(caption = "LOAEL concentration = 57.8\nNOAEL concentration = 34.6\nn = 30 datapoints, n = 7 studies from 4 articles, n = 4 spp. from 3 genera")
+
+settleSS_plot4 + annotate("rect", xmin=57.79, xmax=Inf, 
+                          ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2)
+```
+  
+### Larval mortality
+#### NOAEL/LOAEL defined by exposure concentration
+```{r, echo=FALSE, warning=FALSE}
+#Setting up for LOAEL by filtering for adverse effects (binary=1)
+adverse_survivalSS <- survivalSS %>% 
+  filter(Binary_effect_larval_mortality=="1") %>%
+  arrange(Sed_level_mg_L)
+
+#LOAEL
+summarize(adverse_survivalSS, LOAEL=min(Sed_level_mg_L)) #LOAEL is 30 and comes from Ricardo et al. (2016): Acropora tenuis, measured 2.5 days after start of experiment, when larva was 5.5 days post-fertilization
+loaelSS2 <- adverse_survivalSS %>% summarize(min(Sed_level_mg_L))
+loaelSS2 <- as.numeric(loaelSS2)
+
+#Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
+non_adverse_survivalSS <- survivalSS %>%
+  filter(Binary_effect_larval_mortality=="0") %>%
+  arrange(desc(Sed_level_mg_L)) %>%
+  filter(Sed_level_mg_L<=30) #less than or equal to the LOAEL, which = 30
+
+#NOAEL = maximum sediment level with no adverse effect
+summarize(non_adverse_survivalSS, NOAEL=max(Sed_level_mg_L)) #NOAEL is 29.5
+
+#PLOT
+survivalSS_plot2 + annotate("rect", xmin=30, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2) +
+  labs(title = "Larval Mortality from Suspended Sediment", 
+       subtitle = "n = 50 datapoints, n = 4 studies from 3 articles, n = 4 spp. from 2 genera", 
+       caption = "LOAEL concentration = 30.0\nNOAEL concentration = 29.5")
+
+survivalSS_plot2 + annotate("rect", xmin=30, xmax=Inf, 
+                         ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2) +
+  labs(caption = "LOAEL concentration = 30.0\nNOAEL concentration = 29.5\nn = 50 datapoints, n = 4 studies from 3 articles, n = 4 spp. from 2 genera")
+
+survivalSS_plot4 + annotate("rect", xmin=30, xmax=Inf, 
+                            ymin=-Inf, ymax=Inf, fill = "red", alpha=0.2)
+```
+  
+  
+# Logistic Regression Model Fitting  
+## Deposited Sediment
+```{r, echo=FALSE, warning=FALSE}
+#Let's add a log transformation of sediment level, in case it's needed
+settleDS2 <- settle2 %>% 
+  mutate(log10_conc=log10(Sed_level_mg_cm2_d)) %>% 
+  filter(Control_code=="0")
+settleDS2 %>% tally()
+
+#Models with fixed effect(s) only
+modDS1 <- glm(Binary_effect_limited_settle ~ Sed_level_mg_cm2_d, 
+            family = binomial(link = "logit"), data = settleDS2)
+
+#Models with random effect for coral species or study
+modDS4 <- glmer(Binary_effect_limited_settle ~ Sed_level_mg_cm2_d + (1 | Gsp), 
+              family = binomial, data = settleDS2)
+modDS7 <- glmer(Binary_effect_limited_settle ~ Sed_level_mg_cm2_d + (1 | Ref), 
+              family = binomial, data = settleDS2)
+modDS10 <- glmer(Binary_effect_limited_settle ~ Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref), 
+              family = binomial, data = settleDS2)
+
+#Model comparison and summary
+anova(modDS4,modDS7,modDS10) #modDS7 appears best
+AIC(modDS1,modDS7) #1 is lower by ~2 AIC
+print(summary(modDS7), correlation=FALSE) #no errors
+```
+  
+### Effect estimates  
+```{r, echo=FALSE, warning=FALSE}
+##Diagnostics
+#predicted probabilities, converted to 0 or 1 respectively:
+p <- as.numeric(predict(modDS7, type="response")>0.5)
+#proportion correct:
+mean(p==settleDS2$Binary_effect_limited_settle) #[1] 0.8444444
+#predicted-vs-observed table:
+table(p,settleDS2$Binary_effect_limited_settle)
+#ROC and area under the curve:
+pred_modDS7 <- predict(modDS7, newdata = settleDS2, type = "response")
+auc(roc(settleDS2$Binary_effect_limited_settle, pred_modDS7)) #AUC: 0.9167
+#can also check out 'performance' package https://cran.r-project.org/web/packages/performance/performance.pdf
+r.squaredGLMM(modDS7) #The fixed effect of sediment level explains ~0.3% of variation of the total variation. If the random intercepts for studies are also included, then 55.8% of variation is explained.
+
+##Exploration of random effect(s)
+plot(allEffects(modDS7))
+dotplot(ranef(modDS7, condVar = T)) #residual variation at the level of studies
+qqnorm(ranef(modDS7)$Ref[,1])
+qqline(ranef(modDS7)$Ref[,1]) #distribution of random effects looks good
+VarCorr(modDS7) #SD=2.0307 
+exp(sqrt(VarCorr(modDS7)$Ref[1])) #I think this means that two observations from different studies typically differ by a factor of exp(2.0307) = 7.619567
+modDS7_noSed <- glmer(Binary_effect_limited_settle ~ 1 + (1 | Ref), 
+                    family = binomial, data = settleDS2)
+#Explained_var_Ref <- (1-VarCorr(modDS7)$Ref[1]/VarCorr(modDS7_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
+random.intercepts <- ranef(modDS7)$Ref[["(Intercept)"]]
+Ref.intercepts <- fixef(modDS7)[1] + random.intercepts 
+#plot with probability of binary response on y-axis, each line representing a study:
+for (i in 1:length(random.intercepts)) {
+  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_mg_cm2_d"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_mg_cm2_d"]*x)), 
+                    from = min(settleDS2$Sed_level_mg_cm2_d), to = max(settleDS2$Sed_level_mg_cm2_d), 
+                    ylim = c(0, 1), 
+                    ylab = "Probability of adverse effect", 
+                    xlab = "Exposure concentration, mg/cm2/d")
+  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_mg_cm2_d"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_mg_cm2_d"]*x)), add = T) 
+}
+
+#https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
+#Generally, each k-fold increase in x is associated with a change in the odds by a multiplicative factor of k^(Beta). For instance, k=2 for a doubling of x and k=0.5 for a halving of x is associated with a change in the odds of success by a factor of k^(Beta).
+#If predictor is log-transformed:
+#"Case 1: k=e, i.e. natural log transformed independent variable. Then if Beta is close to zero we can say "a 1% increase in x leads to a Beta percent increase in the odds of the outcome.""
+#"Case 2: base k transformed independent variable: Then the exponentiated coefficient, exp(Beta), can be interpreted as the proportionate increase in the odds from a k-fold increase in the independent variable." -- For k=10, exp(Beta) is the multiplicative change in the odds of success with a 10-fold increase in X1 (with X2 fixed, if relevant).
+
+#Model was non-significant but suggestive
+se <- sqrt(diag(vcov(modDS7)))
+tab <- cbind(Est = fixef(modDS7), 
+             LL = fixef(modDS7) - 1.96 * se, 
+             UL = fixef(modDS7) + 1.96 * se)
+2^(tab)
+```
+    
+There is suggestive, but non-significant, evidence that for every doubling of exposure concentration of deposited sediment, the odds of reduced settlement rate increase by 1.05 times (95% CI 0.99, 1.12; GLMM z = 1.648, p = 0.09) after accounting for variability among studies.
+  
+### Prediction figure  
+```{r}
+#Overlaying glmm results on figure, but prediction line is jagged...
+pred_modDS7 <- predict(modDS7, newdata=settleDS2, type="response")
+settleDS3 <- cbind(settleDS2, pred_modDS7)
+
+settleDS_plot <- ggplot(data = settleDS3) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Binary_effect_limited_settle,
+      color = Ref)) +
+    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
+         y = "Reduced settlement rate due to sediment exposure",
+         color = "Study") +
+    scale_x_log10(limits=c(0.1,1100),breaks=c(0.01,0.1,1,10,100,1000),
+                  label=c("0.01","0.1","1","10","100","1000")) +
+    geom_line(aes(x = Sed_level_mg_cm2_d, y = pred_modDS7), inherit.aes=FALSE) +
+    theme_bw()
+
+settleDS_plot
+```
+
+That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+  
+```{r}
+jvalues <- with(settleDS2, seq(from = min(Sed_level_mg_cm2_d), to = max(Sed_level_mg_cm2_d), length.out = 100))
+
+# calculate predicted probabilities and store in a list
+pp <- lapply(jvalues, function(j) {
+    settleDS2$Sed_level_mg_cm2_d <- j
+    predict(modDS7, newdata = settleDS2, type = "response")
+})
+
+# get the means with lower and upper quartiles
+plotdat <- t(sapply(pp, function(x) {
+    c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
+}))
+
+# add in Sed_level_mg_cm2_d values and convert to data frame
+plotdat <- as.data.frame(cbind(plotdat, jvalues))
+
+# better names and show the first few rows
+colnames(plotdat) <- c("PredictedProbability", "MedianProbability", 
+                       "LowerQuantile", "UpperQuantile", "Sed_conc")
+#head(plotdat)
+
+# plot average marginal predicted probabilities
+ggplot(plotdat, aes(x = Sed_conc)) + 
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) +
+  ylim(c(0, 1))
+ggplot(plotdat, aes(x = Sed_conc)) + 
+  geom_ribbon(aes(ymin = LowerQuantile, ymax = UpperQuantile), alpha = 0.15) +
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) + 
+  ylim(c(0, 1))
+
+#Overlaying average marginal predicted probabilities on figure
+#by Ref
+settleDS_plot3 <- ggplot() +
+    geom_point(data = settleDS2, mapping = aes(
+      x = Sed_level_mg_cm2_d, 
+      y = Binary_effect_limited_settle,
+      color = Ref)) +
+    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
+         y = "Predicted probability of reduced settlement\nrate due to sediment exposure",
+         color = "Binary Data\nby Study",
+         linetype = "Predicted\nProbability") +
+    scale_x_log10(limits=c(0.1,1100), breaks=c(0.01,0.1,1,10,100,1000,loaelDS),
+                  label=c("0.01","0.1","1","10","100","1000",round(loaelDS, digits=1))) +
+    geom_ribbon(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
+                                    ymin = LowerQuantile, ymax = UpperQuantile), 
+                alpha = 0.15) +
+    geom_line(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
+                                  linetype = "twodash")) +
+    geom_line(data = plotdat, aes(x = Sed_conc, y = MedianProbability, 
+                                  linetype = "solid")) +
+    geom_vline(xintercept=loaelDS, linetype="dashed", color = "red") +
+    theme_bw() +
+    scale_linetype_manual(values=c("twodash", "solid"), labels = c("Median","Mean"))
+
+settleDS_plot3
+```
+  
+  
+## Suspended Sediment
+```{r, echo=FALSE, warning=FALSE}
+#Let's add a log transformation of sediment level, in case it's needed
+settleSS2 <- settleSS %>% 
+  filter(Control_code=="0") %>% 
+  mutate(log10_conc=log10(Sed_level_mg_L)) %>% 
+  filter(!is.na(Sed_level_mg_L))
+settleSS2 %>% tally()
+
+#Models with fixed effect(s) only
+modSS1 <- glm(Binary_limited_settlement ~ Sed_level_mg_L, 
+            family = binomial(link = "logit"), data = settleSS2)
+
+#models with random effect for coral species or study
+modSS4 <- glmer(Binary_limited_settlement ~ Sed_level_mg_L + (1 | Gsp), 
+              family = binomial, data = settleSS2)
+modSS7 <- glmer(Binary_limited_settlement ~ Sed_level_mg_L + (1 | Ref), 
+              family = binomial, data = settleSS2)
+modSS10 <- glmer(Binary_limited_settlement ~ Sed_level_mg_L + (1 | Gsp) + (1 | Ref), 
+              family = binomial, data = settleSS2)
+modSS13 <- glmer(Binary_limited_settlement ~ Sed_level_mg_L + (1 | Ref_name/Ref), 
+              family = binomial, data = settleSS2)
+
+#model comparison and summary
+anova(modSS4,modSS7,modSS10,modSS13) #modSS7
+AIC(modSS1,modSS7) #mod7
+print(summary(modSS7), correlation=FALSE) 
+#Model is nearly unidentifiable: large eigenvalue ratio - Rescale variables?
+
+#Trying out a log transformation of predictor...
+modSS7_log <- glmer(Binary_limited_settlement ~ log10_conc + (1 | Ref), 
+                  family = binomial, data = settleSS2)
+print(summary(modSS7_log), correlation=FALSE) #no errors
+```
+  
+### Effect estimates  
+```{r, echo=FALSE, warning=FALSE}
+##Diagnostics
+#predicted probabilities, converted to 0 or 1 respectively:
+p <- as.numeric(predict(modSS7_log, type="response")>0.5)
+#proportion correct:
+mean(p==settleSS2$Binary_limited_settlement) #[1] 1
+#predicted-vs-observed table:
+table(p,settleSS2$Binary_limited_settlement)
+#ROC and area under the curve:
+pred_modSS7_log <- predict(modSS7_log, newdata = settleSS2, type = "response")
+auc(roc(settleSS2$Binary_limited_settlement, pred_modSS7_log)) #AUC: 1
+#can also check out 'performance' package https://cran.r-project.org/web/packages/performance/performance.pdf
+r.squaredGLMM(modSS7_log) #The fixed effect of sediment level explains ~1.6% of variation of the total variation. If the random intercepts for studies are also included, then 100% of variation is explained.
+
+##Exploration of random effect(s)
+plot(allEffects(modSS7_log))
+dotplot(ranef(modSS7_log, condVar = T)) #residual variation at the level of studies -- variation among studies is enormous
+qqnorm(ranef(modSS7_log)$Ref[,1])
+qqline(ranef(modSS7_log)$Ref[,1])
+VarCorr(modSS7_log)
+exp(sqrt(VarCorr(modSS7_log)$Ref[1]))
+modSS7_log_noSed <- glmer(Binary_limited_settlement ~ 1 + (1 | Ref), 
+                  family = binomial, data = settleSS2)
+#Explained_var_Ref <- (1-VarCorr(modSS7_log)$Ref[1]/VarCorr(modSS7_log_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
+random.intercepts <- ranef(modSS7_log)$Ref[["(Intercept)"]]
+Ref.intercepts <- fixef(modSS7_log)[1] + random.intercepts 
+#plot with probability of binary response on y-axis, each line representing a study:
+for (i in 1:length(random.intercepts)) {
+  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modSS7_log)["log10_conc"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSS7_log)["log10_conc"]*x)), 
+                    from = min(settleSS2$log10_conc), to = max(settleSS2$log10_conc), 
+                    ylim = c(0, 1), 
+                    ylab = "Probability of adverse effect", 
+                    xlab = "Exposure concentration, mg/L)")
+  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modSS7_log)["log10_conc"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSS7_log)["log10_conc"]*x)), add = T) 
+}
+
+#https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
+#Generally, each k-fold increase in x is associated with a change in the odds by a multiplicative factor of k^(Beta). For instance, k=2 for a doubling of x and k=0.5 for a halving of x is associated with a change in the odds of success by a factor of k^(Beta).
+#If predictor is log-transformed:
+#"Case 1: k=e, i.e. natural log transformed independent variable. Then if Beta is close to zero we can say "a 1% increase in x leads to a Beta percent increase in the odds of the outcome.""
+#"Case 2: base k transformed independent variable: Then the exponentiated coefficient, exp(Beta), can be interpreted as the proportionate increase in the odds from a k-fold increase in the independent variable." -- For k=10, exp(Beta) is the multiplicative change in the odds of success with a 10-fold increase in X1 (with X2 fixed, if relevant).
+
+se <- sqrt(diag(vcov(modSS7_log)))
+tab <- cbind(Est = fixef(modSS7_log), 
+             LL = fixef(modSS7_log) - 1.96 * se, 
+             UL = fixef(modSS7_log) + 1.96 * se)
+exp(tab)
+```
+    
+There is suggestive, though non-significant, evidence that for every 10-fold increase in exposure concentration of suspended sediment, the odds of reduced settlement rate increase (GLMM z = 1.918, p = 0.055), while accounting for variability among studies.
+  
+### Prediction figures  
+```{r}
+#Overlaying glmm results on figure, but prediction line is jagged...
+pred_modSS7_log <- predict(modSS7_log, newdata=settleSS2, type="response")
+settleSS3 <- cbind(settleSS2, pred_modSS7_log)
+
+settleSS_plot <- ggplot(data = settleSS3) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_limited_settlement,
+      color = Ref)) +
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Reduced settlement rate\ndue to sediment exposure",
+         color = "Study") +
+    scale_x_log10(limits=c(1,1000),breaks=c(0.01,0.1,1,10,100,1000),
+                  label=c("0.01","0.1","1","10","100","1000")) +
+    geom_line(aes(x = Sed_level_mg_L, y = pred_modSS7_log), inherit.aes=FALSE) +
+    theme_bw()
+
+settleSS_plot
+```
+
+That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+  
+#### By sediment exposure concentration
+```{r}
+jvalues <- with(settleSS2, seq(from = min(log10_conc), to = max(log10_conc), length.out = 100))
+
+# calculate predicted probabilities and store in a list
+pp <- lapply(jvalues, function(j) {
+    settleSS2$log10_conc <- j
+    predict(modSS7_log, newdata = settleSS2, type = "response")
+})
+
+# get the means with lower and upper quartiles
+plotdat <- t(sapply(pp, function(x) {
+    c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
+}))
+
+# add in log10_conc values and convert to data frame
+plotdat <- as.data.frame(cbind(plotdat, jvalues))
+plotdat <- plotdat %>% mutate(Sed_level_linear=10^jvalues)
+
+# better names and show the first few rows
+colnames(plotdat) <- c("PredictedProbability", "MedianProbability", 
+                       "LowerQuantile", "UpperQuantile", "log10_mg_L", "mg_L")
+#head(plotdat)
+
+# plot average marginal predicted probabilities
+ggplot(plotdat, aes(x = log10_mg_L)) + 
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) +
+  ylim(c(0, 1))
+ggplot(plotdat, aes(x = log10_mg_L)) + 
+  geom_ribbon(aes(ymin = LowerQuantile, ymax = UpperQuantile), alpha = 0.15) +
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) + 
+  ylim(c(0, 1))
+ggplot(plotdat, aes(x = mg_L, y = PredictedProbability)) + 
+  geom_ribbon(aes(ymin = LowerQuantile, ymax = UpperQuantile), alpha = 0.15) +
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) + 
+  ylim(c(0, 1)) +
+  scale_x_log10()
+
+#Overlaying average marginal predicted probabilities on figure
+#by Ref
+settleSS_plot2 <- ggplot() +
+    geom_point(data = settleSS2, mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_limited_settlement,
+      color = Ref)) +
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Predicted probability of reduced settlement\nrate due to sediment exposure",
+         color = "Binary Data\nby Study",
+         linetype = "Predicted\nProbability") +
+    scale_x_log10(limits=c(1,max(settleSS2$Sed_level_mg_L)), 
+                  breaks=c(0.01,0.1,1,10,100,1000,loaelSS1),
+                  label=c("0.01","0.1","1","10","100","1000",round(loaelSS1,digits = 1))) +
+    geom_ribbon(data = plotdat, aes(x = mg_L, y = PredictedProbability, 
+                                    ymin = LowerQuantile, ymax = UpperQuantile), 
+                alpha = 0.15) +
+    geom_line(data = plotdat, aes(x = mg_L, y = PredictedProbability, 
+                                  linetype = "twodash")) +
+    geom_line(data = plotdat, aes(x = mg_L, y = MedianProbability, 
+                                  linetype = "solid")) +
+    geom_vline(xintercept=loaelSS1, linetype="dashed", color = "red") +
+    theme_bw() +
+    scale_linetype_manual(values=c("twodash", "solid"), labels = c("Median","Mean"))
+
+settleSS_plot2
+```
+  
+
+# Larval Survival  
+## Suspended Sediment
+```{r, echo=FALSE, warning=FALSE}
+#Let's add a log transformation of sediment level, in case it's needed
+survivalSS2 <- survivalSS %>% 
+  filter(Control_code=="0") %>% 
+  mutate(log10_conc=log10(Sed_level_mg_L))
+survivalSS2 %>% tally()
+
+#Models with fixed effect(s) only
+modSSb1 <- glm(Binary_larval_mortality ~ Sed_level_mg_L, 
+            family = binomial(link = "logit"), data = survivalSS2)
+modSSb1b <- glm(Binary_larval_mortality ~ Sed_level_mg_L + Coral_age_at_start_expt_days, 
+            family = binomial(link = "logit"), data = survivalSS2)
+AIC(modSSb1,modSSb1b) #no evidence that coral age improves analysis
+
+#models with random effect for coral species or study
+modSSb4 <- glmer(Binary_larval_mortality ~ Sed_level_mg_L + (1 | Gsp), 
+              family = binomial, data = survivalSS2)
+modSSb7 <- glmer(Binary_larval_mortality ~ Sed_level_mg_L + (1 | Ref), 
+              family = binomial, data = survivalSS2)
+modSSb10 <- glmer(Binary_larval_mortality ~ Sed_level_mg_L + (1 | Gsp) + (1 | Ref), 
+              family = binomial, data = survivalSS2)
+modSSb13 <- glmer(Binary_larval_mortality ~ Sed_level_mg_L + (1 | Ref_name/Ref), 
+              family = binomial, data = survivalSS2)
+
+#model comparison and summary
+anova(modSSb4,modSSb7,modSSb10,modSSb13) #modSSb4 but model has convergence problems
+AIC(modSSb1,modSSb4) #mod4, by 1 AIC
+print(summary(modSSb1), correlation=FALSE) 
+```
+  
+### Effect estimates  
+```{r, echo=FALSE, warning=FALSE}
+##Diagnostics
+#predicted probabilities, converted to 0 or 1 respectively:
+p <- as.numeric(predict(modSSb1, type="response")>0.5)
+#proportion correct:
+mean(p==survivalSS2$Binary_larval_mortality) #[1] 0.8333333
+#predicted-vs-observed table:
+table(p,survivalSS2$Binary_larval_mortality)
+#ROC and area under the curve:
+pred_modSSb1 <- predict(modSSb1, newdata = survivalSS2, type = "response")
+auc(roc(survivalSS2$Binary_larval_mortality, pred_modSSb1)) #AUC:0.6388
+#can also check out 'performance' package https://cran.r-project.org/web/packages/performance/performance.pdf
+r.squaredGLMM(modSSb1) #The fixed effect of sediment level explains ~0.3% of variation of the total variation. If the random intercepts for studies are also included, then 55.8% of variation is explained.
+
+#https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
+#Generally, each k-fold increase in x is associated with a change in the odds by a multiplicative factor of k^(Beta). For instance, k=2 for a doubling of x and k=0.5 for a halving of x is associated with a change in the odds of success by a factor of k^(Beta).
+#If predictor is log-transformed:
+#"Case 1: k=e, i.e. natural log transformed independent variable. Then if Beta is close to zero we can say "a 1% increase in x leads to a Beta percent increase in the odds of the outcome.""
+#"Case 2: base k transformed independent variable: Then the exponentiated coefficient, exp(Beta), can be interpreted as the proportionate increase in the odds from a k-fold increase in the independent variable." -- For k=10, exp(Beta) is the multiplicative change in the odds of success with a 10-fold increase in X1 (with X2 fixed, if relevant).
+
+#Not significant
+#se <- sqrt(diag(vcov(modSSb1)))
+#tab <- cbind(Est = coef(modSSb1), 
+#             LL = coef(modSSb1) - 1.96 * se, 
+#             UL = coef(modSSb1) + 1.96 * se)
+#exp(tab)
+```
+    
+There is no significant relationship between exposure concentration of suspended sediment and the odds of larval mortality (GLMM z = 0.762, p = 0.446).
+  
+### Prediction figures  
+```{r}
+#Overlaying glmm results on figure, but prediction line is jagged...
+pred_modSSb1 <- predict(modSSb1, newdata=survivalSS2, type="response")
+survivalSS3 <- cbind(survivalSS2, pred_modSSb1)
+
+survivalSS_plot <- ggplot(data = survivalSS3) +
+    geom_point(mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_larval_mortality,
+      color = Ref)) +
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Larval mortality due to sediment exposure",
+         color = "Study") +
+    scale_x_log10(limits=c(1,1000),breaks=c(0.01,0.1,1,10,100,1000),
+                  label=c("0.01","0.1","1","10","100","1000")) +
+    geom_line(aes(x = Sed_level_mg_L, y = pred_modSSb1), inherit.aes=FALSE) +
+    theme_bw()
+
+survivalSS_plot
+```
+
+That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+  
+#### By sediment exposure concentration
+```{r}
+jvalues <- with(survivalSS2, seq(from = min(Sed_level_mg_L), to = max(Sed_level_mg_L), length.out = 100))
+
+# calculate predicted probabilities and store in a list
+pp <- lapply(jvalues, function(j) {
+    survivalSS2$Sed_level_mg_L <- j
+    predict(modSSb1, newdata = survivalSS2, type = "response")
+})
+
+# get the means with lower and upper quartiles
+plotdat <- t(sapply(pp, function(x) {
+    c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
+}))
+
+# add in Sed_level_mg_L values and convert to data frame
+plotdat <- as.data.frame(cbind(plotdat, jvalues))
+
+# better names and show the first few rows
+colnames(plotdat) <- c("PredictedProbability", "MedianProbability", 
+                       "LowerQuantile", "UpperQuantile", "Sed_conc")
+#head(plotdat)
+
+# plot average marginal predicted probabilities
+ggplot(plotdat, aes(x = Sed_conc)) + 
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) +
+  ylim(c(0, 1))
+ggplot(plotdat, aes(x = Sed_conc)) + 
+  geom_ribbon(aes(ymin = LowerQuantile, ymax = UpperQuantile), alpha = 0.15) +
+  geom_line(aes(y = PredictedProbability), size = 2) +
+  geom_line(aes(y = MedianProbability), size = 0.5) + 
+  ylim(c(0, 1))
+
+#Overlaying average marginal predicted probabilities on figure
+#by Ref
+survivalSS_plot2 <- ggplot() +
+    geom_point(data = survivalSS2, mapping = aes(
+      x = Sed_level_mg_L, 
+      y = Binary_larval_mortality,
+      color = Ref)) +
+    labs(x = "Sediment exposure concentration (mg/L)", 
+         y = "Predicted probability of larval\nmortality due to sediment exposure",
+         color = "Binary Data\nby Study",
+         linetype = "Predicted\nProbability") +
+    scale_x_log10(limits=c(1,max(survivalSS2$Sed_level_mg_L)), 
+                  breaks=c(0.01,0.1,1,10,100,1000,loaelSS2),
+                  label=c("0.01","0.1","1","10","100","1000",round(loaelSS2,digits = 1))) +
+    geom_ribbon(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
+                                    ymin = LowerQuantile, ymax = UpperQuantile), 
+                alpha = 0.15) +
+    geom_line(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
+                                  linetype = "twodash")) +
+    geom_line(data = plotdat, aes(x = Sed_conc, y = MedianProbability, 
+                                  linetype = "solid")) +
+    geom_vline(xintercept=loaelSS2, linetype="dashed", color = "red") +
+    theme_bw() +
+    scale_linetype_manual(values=c("twodash", "solid"), labels = c("Median","Mean"))
+
+survivalSS_plot2
+```
+  
