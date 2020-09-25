@@ -1,7 +1,7 @@
 ---
-title: "Effects of sediment on coral fertilization"
+title: "Binary effects of sediment on coral fertilization"
 author: "Lillian J. Tuttle"
-date: "6/24/2020"
+date: "9/24/2020"
 output: html_document
 ---
 
@@ -14,7 +14,7 @@ library(pROC)
 library(effects)
 library(lattice)
 library(MuMIn)
-fertilizationSS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/fertilization/fertilization.csv", header=T)
+binary <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/coral_stressor_thresholds/sediment/data/binary_ALL.csv", header=T)
 
 #keyboard shortcuts to remember: 
 #command-option-I inserts new code chunk
@@ -31,8 +31,9 @@ Specifically, we will explore the results of 110 datapoints from 6 studies condu
 ```{r, echo=FALSE, warning=FALSE}
 #SETTLEMENT
 #head(fertSS)
-fertSS <- fertilizationSS %>%
-  mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_"))
+fertSS <- binary %>%
+  mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
+  filter(!is.na(Binary_reduced_fertilization))
 fertSS %>% tally() #n=110 datapoints, tally() returns same result as count(fertSS)
 fertSS %>% count(Ref, sort=T) #n=10 studies
 fertSS %>% count(Ref_name, sort=T) #n=6 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
@@ -51,23 +52,10 @@ First let's explore all data from all species for which there is data about 'fer
 
 ```{r, echo=FALSE, warning=FALSE}
 #SUSPENDED SEDIMENT - Fertilization
-fertSS_plot1 <- ggplot(data = fertSS) +
-  geom_point(mapping = aes(
-    x = Sed_level_mg_L, 
-    y = Resp1_level,
-    color = Gsp)) +
-  labs(x = "Total suspended sediment (mg/L)", 
-       y = "Fertilization success (%)",
-       color = "Species") + 
-  scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000),
-                label=c("0.01","0.1","1","10","100","1000")) +
-  scale_y_continuous(limits = c(0,100)) +
-  theme_bw()
-
 fertSS_plot2 <- ggplot(data = fertSS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Binary_effect_reduced_fert,
+      x = Sed_level_stand_mg, 
+      y = Binary_reduced_fertilization,
       color = Gsp)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Reduced fertilization success\ndue to suspended sediment? (0/1)",
@@ -80,8 +68,8 @@ fertSS_plot2 <- ggplot(data = fertSS) +
 
 fertSS_plot3 <- ggplot(data = fertSS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Binary_effect_reduced_fert,
+      x = Sed_level_stand_mg, 
+      y = Binary_reduced_fertilization,
       color = Gsp, size = 3)) +
     labs(x = "", y = "", color = "") +
     scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000),
@@ -94,10 +82,11 @@ fertSS_plot3 <- ggplot(data = fertSS) +
           axis.text.y=element_text(size=rel(2)),
           legend.key.size = unit(4,"line"))
 
+#plot for Fig. 2A
 fertSS_plot4 <- ggplot(data = fertSS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Binary_effect_reduced_fert, size = 5)) +
+      x = Sed_level_stand_mg, 
+      y = Binary_reduced_fertilization, size = 5)) +
     labs(x = "", y = "") +
     scale_x_log10(limits = c(1,1000), breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) + 
@@ -108,8 +97,6 @@ fertSS_plot4 <- ggplot(data = fertSS) +
     
 
 #PLOTS:
-fertSS_plot1 + labs(title = "Fertilization Success and Suspended Sediment", 
-                    subtitle = "n=110 datapoints, n=10 studies, n=2 genera")
 fertSS_plot2 + labs(title = "Fertilization Success and Suspended Sediment", 
                     subtitle = "n=110 datapoints, n=10 studies, n=2 genera")
 fertSS_plot3
@@ -118,17 +105,6 @@ fertSS_plot4 + scale_y_continuous(breaks=c(0,1)) +
 ```
   
   
-### Exploring the same plots with PLOTLY...  
-
-##### Fertilization, n=110 datapoints, n=6 studies, n=2 genera
-**Legend**: Reduced fertilization success due to suspended sediment? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
-  
-```{r, echo=FALSE, warning=FALSE}
-fertSS_plotly <- ggplotly(fertSS_plot2)
-fertSS_plotly
-```
-  
-    
 # Threshold Analyses with Binary Data 
 Now let's calculate the thresholds, based on the binary data explored above.  
 
@@ -141,22 +117,22 @@ Now let's calculate the thresholds, based on the binary data explored above.
 ```{r, echo=FALSE, warning=FALSE}
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_fertSS <- fertSS %>% 
-  filter(Binary_effect_reduced_fert=="1") %>%
-  arrange(Sed_level_mg_L)
+  filter(Binary_reduced_fertilization=="1") %>%
+  arrange(Sed_level_stand_mg)
 
 #LOAEL
-summarize(adverse_fertSS, LOAEL=min(Sed_level_mg_L)) #LOAEL is 30.4 mg/L for 0.0625 days and comes from Humanes et al. 2017b: Acropora tenuis
-loael <- adverse_fertSS %>% summarize(min(Sed_level_mg_L))
+summarize(adverse_fertSS, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 30.4 mg/L for 0.0625 days and comes from Humanes et al. 2017b: Acropora tenuis
+loael <- adverse_fertSS %>% summarize(min(Sed_level_stand_mg))
 loael <- as.numeric(loael)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_fertSS <- fertSS %>%
-  filter(Binary_effect_reduced_fert=="0") %>%
-  arrange(desc(Sed_level_mg_L)) %>%
-  filter(Sed_level_mg_L<=30.4) #less than or equal to the LOAEL, which = 30.4
+  filter(Binary_reduced_fertilization=="0") %>%
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=30.4) #less than or equal to the LOAEL, which = 30.4
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_fertSS, NOAEL=max(Sed_level_mg_L)) #NOAEL is 25
+summarize(non_adverse_fertSS, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 25
 
 #PLOT
 fertSS_plot2 + annotate("rect", xmin=30.4, xmax=Inf, 
@@ -177,64 +153,64 @@ fertSS_plot3 + annotate("rect", xmin=30.4, xmax=Inf,
 ```{r, echo=FALSE, warning=FALSE}
 #Let's remove controls for which sediment level was zero, and add a log transformation of sediment level, in case it's needed
 fertSS2 <- fertSS %>% 
-  select(Ref, Ref_name, Binary_effect_reduced_fert, Control_code, Sed_level_mg_L, Sed_exposure_days, Gsp) %>% 
-  mutate(log10_mg_L=log10(Sed_level_mg_L))
+  select(Ref, Ref_name, Binary_reduced_fertilization, Control_code, Sed_level_stand_mg, Sed_exposure_days, Gsp) %>% 
+  mutate(log10_mg_L=log10(Sed_level_stand_mg))
 
 #Models with fixed effect(s) only
-mod1 <- glm(Binary_effect_reduced_fert ~ Sed_level_mg_L, 
+mod1 <- glm(Binary_reduced_fertilization ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = fertSS2)
-mod2 <- glm(Binary_effect_reduced_fert ~ Sed_level_mg_L + Sed_exposure_days, 
+mod2 <- glm(Binary_reduced_fertilization ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = fertSS2)
-mod3 <- glm(Binary_effect_reduced_fert ~ Sed_level_mg_L*Sed_exposure_days, 
+mod3 <- glm(Binary_reduced_fertilization ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = fertSS2)
 
 #Models with random effect for coral species or study
 #In this case, exposure duration is not so important, but I've included models with this as a fixed effect, just to maintain consistency with other coral responses for which exposure duration may matter more
-mod4 <- glmer(Binary_effect_reduced_fert ~ Sed_level_mg_L + (1 | Gsp), 
+mod4 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = fertSS2)
-mod5 <- glmer(Binary_effect_reduced_fert ~ Sed_level_mg_L + Sed_exposure_days + (1 | Gsp), 
+mod5 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = fertSS2)
-mod6 <- glmer(Binary_effect_reduced_fert ~ Sed_level_mg_L*Sed_exposure_days + (1 | Gsp), 
+mod6 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = fertSS2)
-mod7 <- glmer(Binary_effect_reduced_fert ~ Sed_level_mg_L + (1 | Ref), 
+mod7 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = fertSS2)
-mod8 <- glmer(Binary_effect_reduced_fert ~ Sed_level_mg_L + Sed_exposure_days + (1 | Ref), 
+mod8 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
               family = binomial, data = fertSS2)
-mod9 <- glmer(Binary_effect_reduced_fert ~ Sed_level_mg_L*Sed_exposure_days + (1 | Ref), 
+mod9 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Ref), 
               family = binomial, data = fertSS2)
-mod10 <- glmer(Binary_effect_reduced_fert ~ Sed_level_mg_L + (1 | Gsp) + (1 | Ref), 
+mod10 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = fertSS2)
-mod11 <- glmer(Binary_effect_reduced_fert ~ 
-                Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+mod11 <- glmer(Binary_reduced_fertilization ~ 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = fertSS2)
-mod12 <- glmer(Binary_effect_reduced_fert ~ 
-                Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+mod12 <- glmer(Binary_reduced_fertilization ~ 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = fertSS2)
-mod13 <- glmer(Binary_effect_reduced_fert ~ Sed_level_mg_L + (1 | Ref_name/Ref), 
+mod13 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + (1 | Ref_name/Ref), 
               family = binomial, data = fertSS2)
-mod14 <- glmer(Binary_effect_reduced_fert ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Ref_name/Ref), 
+mod14 <- glmer(Binary_reduced_fertilization ~ 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = fertSS2)
-mod15 <- glmer(Binary_effect_reduced_fert ~ 
-                 Sed_level_mg_L*Sed_exposure_days + (1 | Ref_name/Ref), 
+mod15 <- glmer(Binary_reduced_fertilization ~ 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = fertSS2)
-mod16 <- glmer(Binary_effect_reduced_fert ~ 
-                 Sed_level_mg_L + (1 | Gsp) + (1 | Ref_name), 
+mod16 <- glmer(Binary_reduced_fertilization ~ 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = fertSS2)
-mod17 <- glmer(Binary_effect_reduced_fert ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+mod17 <- glmer(Binary_reduced_fertilization ~ 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = fertSS2)
-mod18 <- glmer(Binary_effect_reduced_fert ~ 
-                 Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+mod18 <- glmer(Binary_reduced_fertilization ~ 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = fertSS2)
-mod19 <- glmer(Binary_effect_reduced_fert ~ 
-                 Sed_level_mg_L + (1 | Gsp) + (1 | Ref_name/Ref), 
+mod19 <- glmer(Binary_reduced_fertilization ~ 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = fertSS2)
-mod20 <- glmer(Binary_effect_reduced_fert ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+mod20 <- glmer(Binary_reduced_fertilization ~ 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = fertSS2)
-mod21 <- glmer(Binary_effect_reduced_fert ~ 
-                 Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+mod21 <- glmer(Binary_reduced_fertilization ~ 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = fertSS2)
 
 #Model comparison and summary
@@ -247,12 +223,12 @@ print(summary(mod7), correlation=FALSE)
 #Trying out a log transformation of predictor...
 fertSS3 <- fertSS2 %>% filter(Control_code=="0")
 fertSS3 %>% tally() #n=86
-mod7_log <- glmer(Binary_effect_reduced_fert ~ log10_mg_L + (1 | Ref), 
+mod7_log <- glmer(Binary_reduced_fertilization ~ log10_mg_L + (1 | Ref), 
                   family = binomial, data = fertSS3)
 #print(summary(mod7_log), correlation=FALSE) #No errors!
 
 #Changing to random slopes/intercept
-mod7_log2 <- glmer(Binary_effect_reduced_fert ~ log10_mg_L + (log10_mg_L | Ref), 
+mod7_log2 <- glmer(Binary_reduced_fertilization ~ log10_mg_L + (log10_mg_L | Ref), 
                    family = binomial, data = fertSS3)
 anova(mod7_log,mod7_log2) #original (log) still best
 
@@ -267,12 +243,12 @@ print(summary(mod7_log), correlation=FALSE)
 #predicted probabilities, converted to 0 or 1 respectively:
 p <- as.numeric(predict(mod7_log, type="response")>0.5)
 #proportion correct:
-mean(p==fertSS3$Binary_effect_reduced_fert) #[1] 0.8837209
+mean(p==fertSS3$Binary_reduced_fertilization) #[1] 0.8837209
 #predicted-vs-observed table:
-table(p,fertSS3$Binary_effect_reduced_fert)
+table(p,fertSS3$Binary_reduced_fertilization)
 #ROC and area under the curve:
 pred_mod7_log <- predict(mod7_log, newdata = fertSS3, type = "response")
-auc(roc(fertSS3$Binary_effect_reduced_fert, pred_mod7_log)) #AUC: 0.9534
+auc(roc(fertSS3$Binary_reduced_fertilization, pred_mod7_log)) #AUC: 0.9534
 #can also check out 'performance' package https://cran.r-project.org/web/packages/performance/performance.pdf
 r.squaredGLMM(mod7_log) #The fixed effect of sediment level explains ~40% of variation of the total variation. If the random intercepts for studies are also included, then 80% of variation is explained.
 
@@ -283,9 +259,8 @@ qqnorm(ranef(mod7_log)$Ref[,1])
 qqline(ranef(mod7_log)$Ref[,1]) #distribution of random effects looks good
 VarCorr(mod7_log) #SD=2.5075
 exp(sqrt(VarCorr(mod7_log)$Ref[1])) #I think this means that two observations from different studies typically differ by a factor of exp(2.5) = 12.27421 (?)
-mod7_log_noSed <- glmer(Binary_effect_reduced_fert ~ 1 + (1 | Ref), 
+mod7_log_noSed <- glmer(Binary_reduced_fertilization ~ 1 + (1 | Ref), 
                   family = binomial, data = fertSS3)
-#Explained_var_Ref <- (1-VarCorr(mod7_log)$Ref[1]/VarCorr(mod7_log_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(mod7_log)$Ref[["(Intercept)"]]
 Ref.intercepts <- fixef(mod7_log)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
@@ -321,8 +296,8 @@ fertSS4 <- cbind(fertSS3, pred_mod7_log)
 
 fertSS_plot3 <- ggplot(data = fertSS4) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Binary_effect_reduced_fert,
+      x = Sed_level_stand_mg, 
+      y = Binary_reduced_fertilization,
       color = Gsp)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Reduced fertilization success\ndue to suspended sediment? (0/1)",
@@ -330,14 +305,14 @@ fertSS_plot3 <- ggplot(data = fertSS4) +
     scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
     scale_y_continuous(breaks=c(0,1)) +
-    geom_line(aes(x = Sed_level_mg_L, y = pred_mod7_log), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_mod7_log), inherit.aes=FALSE) +
     theme_bw() +
     scale_color_discrete(labels = c(expression(italic("Acropora digitifera")),expression(italic("Acropora millepora")),expression(italic("Acropora tenuis")),expression(italic("Pectina lactusa")))) + theme(legend.text.align = 0)
 
 fertSS_plot3
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 ```{r}
 #summary(fertSS3$log10_mg_L)
@@ -389,8 +364,8 @@ ggplot(plotdat, aes(x = mg_L, y = PredictedProbability)) +
 #Overlaying average marginal predicted probabilities on figure
 fertSS_plot3 <- ggplot() +
     geom_point(data = fertSS3, mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Binary_effect_reduced_fert,
+      x = Sed_level_stand_mg, 
+      y = Binary_reduced_fertilization,
       color = Ref)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Predicted probability of reduced\nfertilization success due to sediment exposure",
@@ -410,8 +385,8 @@ fertSS_plot3 <- ggplot() +
 #And now by Ref instead of species
 fertSS_plot5 <- ggplot() +
     geom_point(data = fertSS3, mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Binary_effect_reduced_fert,
+      x = Sed_level_stand_mg, 
+      y = Binary_reduced_fertilization,
       color = Ref,
       shape = Gsp)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
@@ -431,6 +406,7 @@ fertSS_plot5 <- ggplot() +
 
 fertSS_plot3
 fertSS_plot5 + labs(caption = "LOAEL concentration = 30.4\nNOAEL concentration = 25.0")
+#Plot for Fig. 2B
 fertSS_plot4 + scale_y_continuous(breaks=c(0,0.25,0.5,0.75,1)) +
   geom_ribbon(data = plotdat, 
               aes(x = mg_L, y = PredictedProbability, 
