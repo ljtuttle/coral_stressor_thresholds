@@ -1,7 +1,7 @@
 ---
-title: "Effects of sediment on the growth of adult corals"
+title: "Binary effects of sediment on the growth of adult corals"
 author: "Lillian J. Tuttle"
-date: "7/28/2020"
+date: "9/24/2020"
 output: html_document
 ---
 
@@ -14,8 +14,7 @@ library(pROC)
 library(effects)
 library(lattice)
 library(MuMIn)
-binaryDS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/binary/binaryDS.csv", header=T)
-binarySS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/binary/binarySS.csv", header=T)
+binary <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/coral_stressor_thresholds/sediment/data/binary_ALL.csv", header=T)
 
 #keyboard shortcuts to remember: 
 #command-option-I inserts new code chunk
@@ -32,10 +31,12 @@ Specifically, we will explore the results of 55 datapoints from 10 studies condu
 
 ```{r, echo=FALSE, warning=FALSE}
 #head(growthDS)
-growthDS <- binaryDS %>%
+growthDS <- binary %>%
+  filter(DS_SS=="DS") %>% 
   mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
   filter(!is.na(Binary_reduced_growth)) %>% 
-  filter(Binary_sed_burial=="0")
+  filter(Binary_sed_burial=="0") %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Binary_reduced_growth, Updated_Genus, Gsp, Ocean, Sed_exposure_days)
 growthDS %>% tally() #n=55 datapoints, tally() returns same result as count(growthDS)
 growthDS %>% count(Ref, sort=T) #n=10 studies
 growthDS %>% count(Ref_name, sort=T) #n=10 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
@@ -49,10 +50,12 @@ Specifically, we will explore the results of 79 datapoints from 5 studies conduc
 
 ```{r, echo=FALSE, warning=FALSE}
 #head(binarySS)
-growthSS <- binarySS %>%
+growthSS <- binary %>%
+  filter(DS_SS=="SS") %>% 
   mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
   filter(Coral_age_class=="adult") %>% #only adult corals
-  filter(!is.na(Binary_reduced_growth))
+  filter(!is.na(Binary_reduced_growth)) %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Binary_reduced_growth, Updated_Genus, Gsp, Ocean, Sed_exposure_days)
 growthSS %>% tally() #n=79 datapoints, tally() returns same result as count(growthSS)
 growthSS %>% count(Ref, sort=T) #n=7 studies
 growthSS %>% count(Ref_name, sort=T) #n=5 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
@@ -73,25 +76,14 @@ First let's explore all data from all species for which there is binary data abo
 ```{r, echo=FALSE, warning=FALSE}
 #DEPOSITED SEDIMENT
 #growth rate, plotted by exposure concentration (x) and exposure duration (y)
-growth_rate <- growthDS %>% 
-  select(Ref, Ref_name, Sed_level_mg_cm2_d, Binary_reduced_growth, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Sed_days, Sed_origin, Sed_grain_class, Binary_sed_burial) %>% 
-  filter(Binary_sed_burial=="0") %>% #remove all studies that buried corals instead of giving them a specific dosage (in mg/cm2/day)
-  filter(!is.na(Binary_reduced_growth)) #remove NAs (studies that did not describe growth)
-growth_rate %>% tally() #n=55 datapoints, tally() returns same result as count(growth_rate)
-growth_rate %>% count(Ref, sort=T) #n=10 studies,
-growth_rate %>% count(Ref_name, sort=T) #n=10 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-growth_rate %>% count(Gsp, sort=T) #n=10 species
-growth_rate %>% count(Updated_Genus, sort=T) #n=7 genera, top four: Pocillopora n=17, Astrangia n=12, Acropora n=10, Porites n=8
-#head(growth_rate)
-
-growth_rate_plot <- ggplot(data=growth_rate, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
+growthDS_plot <- ggplot(data=growthDS, mapping = aes(
+      x = Sed_level_stand_mg, 
+      y = Sed_exposure_days,
       color = factor(Binary_reduced_growth),
       shape = factor(Binary_reduced_growth),
       position = "jitter",
       text = Gsp)) +
-    geom_point(data = subset(growth_rate, Binary_reduced_growth=="0")) + 
+    geom_point(data = subset(growthDS, Binary_reduced_growth=="0")) + 
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
          y = "Exposure duration (days)") +
     scale_x_log10(limits = c(0.01,1000), breaks=c(0.01,0.1,1,10,100,1000), 
@@ -109,13 +101,8 @@ growth_rate_plot <- ggplot(data=growth_rate, mapping = aes(
 
 #SUSPENDED SEDIMENT
 #growth, plotted by exposure concentration (x) and exposure duration (y)
-growthSS <- growthSS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_L, Binary_reduced_growth, Updated_Genus, Gsp, Ocean, Sed_exposure_days)
-#growthSS %>% count(Updated_Genus, sort=T) #n=12 genera, top four: Goniastrea n=12, Porites n=12, Cladocora n=8, Manicina n=8
-#head(growth)
-
 growthSS_plot <- ggplot(data=growthSS, mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Sed_exposure_days,
       color = factor(Binary_reduced_growth),
       shape = factor(Binary_reduced_growth),
@@ -139,67 +126,12 @@ growthSS_plot <- ggplot(data=growthSS, mapping = aes(
 
 
 #PLOTS:
-growth_rate_plot + geom_point(data = subset(growth_rate, Binary_reduced_growth=="1")) +
+growthDS_plot + geom_point(data = subset(growthDS, Binary_reduced_growth=="1")) +
   labs(title = "Reduced Growth Rate from Deposited Sediment", 
        subtitle = "n = 55 datapoints, n = 10 studies from 10 articles, n = 10 spp. from 7 genera")
 growthSS_plot + geom_point(data = subset(growthSS, Binary_reduced_growth=="1")) +
   labs(title = "Reduced Growth Rate from Suspended Sediment", 
        subtitle = "n = 79 datapoints, n = 7 studies from 5 articles, n = 12 spp. from 12 genera")
-```
-  
-  
-### Exploring the same plots with PLOTLY...  
-
-##### Growth rate
-**Legend**: Reduced growth rate due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different genera.
-
-**Deposited sediment**: All species, n=35 datapoints, n=8 studies, n=6 genera
-```{r, echo=FALSE, warning=FALSE}
-growth_rate_plot2 <- ggplot(data=growth_rate) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      shape = factor(Binary_reduced_growth),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sedimentation rate (mg/cm2/d)", 
-         y = "Exposure duration (days)",
-         shape = "Reduced growth rate\ndue to sedimentation?",
-         color = "Genus") +
-    scale_x_log10(limits = c(0.01,1000), breaks=c(0.01,0.1,1,10,100,1000), 
-                  label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(limits = c(1,200), breaks=c(1,10,100), 
-                  label=c("1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-growth_rate_plotly <- ggplotly(growth_rate_plot2, tooltip="text")
-growth_rate_plotly #plot where I can hover over points and get species, but legend cut-off
-```
-  
-**Suspended sediment**: All species, n=79 datapoints, n=5 studies, n=12 genera
-```{r, echo=FALSE, warning=FALSE}
-growthSS_plot2 <- ggplot(data=growthSS) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Sed_exposure_days,
-      shape = factor(Binary_reduced_growth),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Total suspended sediment (mg/L)", 
-         y = "Exposure duration (days)",
-         shape = "Reduced growth rate\ndue to sedimentation?",
-         color = "Genus") +
-    scale_x_log10(limits = c(0.1,1000), 
-                  breaks=c(0.1,1,10,100,1000), 
-                  label=c("0.1","1","10","100","1000")) +
-    scale_y_log10(limits = c(1,100), breaks=c(1,10,100), 
-                  label=c("1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-growthSS_plotly <- ggplotly(growthSS_plot2, tooltip="text")
-growthSS_plotly #plot where I can hover over points and get species, but legend cut-off
 ```
   
     
@@ -216,31 +148,28 @@ Now let's calculate the thresholds, based on the binary data explored above.
 #### NOAEL/LOAEL defined by exposure concentration  
 ```{r, echo=FALSE, warning=FALSE}
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
-adverse_growth_rate <- growth_rate %>% 
+adverse_growthDS <- growthDS %>% 
   filter(Binary_reduced_growth=="1") %>%
-  arrange(Sed_level_mg_cm2_d) #minimum Sedimentation level is 53 but only two rows from Lirman et al. (2008)!!
+  arrange(Sed_level_stand_mg) #minimum Sedimentation level is 53 but only two rows from Lirman et al. (2008)!!
 
 #LOAEL
-summarize(adverse_growth_rate, LOAEL=min(Sed_level_mg_cm2_d)) #LOAEL is 53 and comes from Lirman et al. (2008)!!
-loael <- adverse_growth_rate %>% summarize(min(Sed_level_mg_cm2_d))
+summarize(adverse_growthDS, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 53 and comes from Lirman et al. (2008)!!
+loael <- adverse_growthDS %>% summarize(min(Sed_level_stand_mg))
 loael <- as.numeric(loael)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
-non_adverse_growth_rate <- growth_rate %>%
+non_adverse_growthDS <- growthDS %>%
   filter(Binary_reduced_growth=="0") %>%
-  arrange(desc(Sed_level_mg_cm2_d)) %>%
-  filter(Sed_level_mg_cm2_d<=53) #less than or equal to the LOAEL, which = 53
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=53) #less than or equal to the LOAEL, which = 53
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_growth_rate, NOAEL=max(Sed_level_mg_cm2_d)) #NOAEL is 38.4
+summarize(non_adverse_growthDS, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 38.4
 
 #PLOT
-growth %>% 
-  select(Ocean, Region, Genus, species, Binary_sed_burial, Sed_level_mg_cm2_d, Binary_reduced_growth) %>% 
-  filter(Binary_sed_burial=="0") %>% #remove all studies that buried corals instead of #giving them a specific dosage (in mg/cm2/day)
-  ggplot() +
+ggplot(data=growthDS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_growth)) + 
     labs(x = "Sedimentation rate (mg/cm2/d)", 
          y = "Reduced growth rate\ndue to sedimentation?") +
@@ -253,30 +182,30 @@ growth %>%
 ### NOAEL/LOAEL defined by exposure duration  
 ```{r, echo=FALSE, warning=FALSE}
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
-adverse_growth_rate2 <- growth_rate %>% 
+adverse_growthDS2 <- growthDS %>% 
   filter(Binary_reduced_growth=="1") %>% 
-  filter(!is.na(Sed_days)) %>% 
-  arrange(Sed_days)
+  filter(!is.na(Sed_exposure_days)) %>% 
+  arrange(Sed_exposure_days)
 
 #LOAEL
-summarize(adverse_growth_rate2, LOAEL=min(Sed_days)) #LOAEL is 21 days
+summarize(adverse_growthDS2, LOAEL=min(Sed_exposure_days)) #LOAEL is 21 days
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
-non_adverse_growth_rate2 <- growth_rate %>%
+non_adverse_growthDS2 <- growthDS %>%
   filter(Binary_reduced_growth=="0") %>%
-  filter(Sed_days<=21) #less than or equal to the LOAEL, which = 21
+  filter(Sed_exposure_days<=21) #less than or equal to the LOAEL, which = 21
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_growth_rate2, NOAEL=max(Sed_days)) #NOAEL is 21 days
+summarize(non_adverse_growthDS2, NOAEL=max(Sed_exposure_days)) #NOAEL is 21 days
 
 #PLOT LOAELs
-growth_rate_plot + geom_point(data = subset(growth_rate, Binary_reduced_growth=="1")) +
+growthDS_plot + geom_point(data = subset(growthDS, Binary_reduced_growth=="1")) +
   labs(title = "Reduced Growth Rate from Deposited Sediment", 
        subtitle = "n = 55 datapoints, n = 10 studies from 10 articles, n = 10 spp. from 7 genera", 
        caption = "LOAEL concentration = 53.0, duration = 21 d\nNOAEL concentration = 38.4, duration = 21 d\nShaded box represents 'risky' exposure area") +
     annotate("rect", xmin=53, xmax=Inf, ymin=21, ymax=Inf, fill = "red", alpha=0.2)
 
-growth_rate_plot + geom_point(data = subset(growth_rate, Binary_reduced_growth=="1")) +
+growthDS_plot + geom_point(data = subset(growthDS, Binary_reduced_growth=="1")) +
   labs(caption = "LOAEL concentration = 53.0, duration = 21 d\nNOAEL concentration = 38.4, duration = 21 d\nShaded box represents 'risky' exposure area\nn = 55 datapoints, n = 10 studies from 10 articles, n = 10 spp. from 7 genera") +
     annotate("rect", xmin=53, xmax=Inf, ymin=21, ymax=Inf, fill = "red", alpha=0.2)
 ```
@@ -288,28 +217,26 @@ growth_rate_plot + geom_point(data = subset(growth_rate, Binary_reduced_growth==
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_growthSS <- growthSS %>% 
   filter(Binary_reduced_growth=="1") %>%
-  arrange(Sed_level_mg_L)
+  arrange(Sed_level_stand_mg)
 
 #LOAEL
-summarize(adverse_growthSS, LOAEL=min(Sed_level_mg_L)) #LOAEL is 58.6 and comes from Te (2001 Chapter 6) with Montipora_verrucosa for 31 days exposure
-loaelSS <- adverse_growthSS %>% summarize(min(Sed_level_mg_L))
+summarize(adverse_growthSS, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 58.6 and comes from Te (2001 Chapter 6) with Montipora_verrucosa for 31 days exposure
+loaelSS <- adverse_growthSS %>% summarize(min(Sed_level_stand_mg))
 loaelSS <- as.numeric(loaelSS)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_growthSS <- growthSS %>%
   filter(Binary_reduced_growth=="0") %>%
-  arrange(desc(Sed_level_mg_L)) %>%
-  filter(Sed_level_mg_L<=58.6) #less than or equal to the LOAEL, which = 58.6
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=58.6) #less than or equal to the LOAEL, which = 58.6
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_growthSS, NOAEL=max(Sed_level_mg_L)) #NOAEL is 49
+summarize(non_adverse_growthSS, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 49
 
 #PLOT
-growthSS %>% 
-  select(Ocean, Gsp, Sed_level_mg_L, Binary_reduced_growth) %>% 
-  ggplot() +
+ggplot(data = growthSS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L,
+      x = Sed_level_stand_mg,
       y = Binary_reduced_growth)) + 
     labs(x = "Total suspended sediment (mg/L)", 
          y = "Reduced growth rate\ndue to sedimentation?") +
@@ -355,64 +282,63 @@ growthSS_plot + geom_point(data = subset(growthSS, Binary_reduced_growth=="1")) 
 ```{r, echo=FALSE, warning=FALSE}
 #Let's add a log transformation of sediment level, in case it's needed
 growthDS2 <- growthDS %>% 
-  select(Ref, Ref_name, Binary_reduced_growth, Control_code, Sed_level_mg_cm2_d, Sed_days, Gsp) %>% 
-  mutate(log10_conc=log10(Sed_level_mg_cm2_d)) %>% 
+  mutate(log10_conc=log10(Sed_level_stand_mg)) %>% 
   filter(Control_code=="0")
 
 #Models with fixed effect(s) only
-mod1 <- glm(Binary_reduced_growth ~ Sed_level_mg_cm2_d, 
+mod1 <- glm(Binary_reduced_growth ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = growthDS2)
-mod2 <- glm(Binary_reduced_growth ~ Sed_level_mg_cm2_d + Sed_days, 
+mod2 <- glm(Binary_reduced_growth ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = growthDS2)
-mod3 <- glm(Binary_reduced_growth ~ Sed_level_mg_cm2_d*Sed_days, 
+mod3 <- glm(Binary_reduced_growth ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = growthDS2)
 
 #Models with random effect for coral species or study
-mod4 <- glmer(Binary_reduced_growth ~ Sed_level_mg_cm2_d + (1 | Gsp), 
+mod4 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = growthDS2)
-mod5 <- glmer(Binary_reduced_growth ~ Sed_level_mg_cm2_d + Sed_days + (1 | Gsp), 
+mod5 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = growthDS2)
-mod6 <- glmer(Binary_reduced_growth ~ Sed_level_mg_cm2_d*Sed_days + (1 | Gsp), 
+mod6 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = growthDS2)
-mod7 <- glmer(Binary_reduced_growth ~ Sed_level_mg_cm2_d + (1 | Ref), 
+mod7 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = growthDS2)
-mod8 <- glmer(Binary_reduced_growth ~ Sed_level_mg_cm2_d + Sed_days + (1 | Ref), 
+mod8 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
               family = binomial, data = growthDS2)
-mod9 <- glmer(Binary_reduced_growth ~ Sed_level_mg_cm2_d*Sed_days + (1 | Ref), 
+mod9 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Ref), 
               family = binomial, data = growthDS2)
-mod10 <- glmer(Binary_reduced_growth ~ Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref), 
+mod10 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = growthDS2)
 mod11 <- glmer(Binary_reduced_growth ~ 
-                Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = growthDS2)
 mod12 <- glmer(Binary_reduced_growth ~ 
-                Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = growthDS2)
-mod13 <- glmer(Binary_reduced_growth ~ Sed_level_mg_cm2_d + (1 | Ref_name/Ref), 
+mod13 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + (1 | Ref_name/Ref), 
               family = binomial, data = growthDS2)
 mod14 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_cm2_d + Sed_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = growthDS2)
 mod15 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_cm2_d*Sed_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = growthDS2)
 mod16 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = growthDS2)
 mod17 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = growthDS2)
 mod18 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = growthDS2)
 mod19 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = growthDS2)
 mod20 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = growthDS2)
 mod21 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = growthDS2)
 
 #Model comparison and summary
@@ -451,17 +377,16 @@ VarCorr(mod7) #SD=2.0307
 exp(sqrt(VarCorr(mod7)$Ref[1])) #I think this means that two observations from different studies typically differ by a factor of exp(2.0307) = 7.619567
 mod7_noSed <- glmer(Binary_reduced_growth ~ 1 + (1 | Ref), 
                     family = binomial, data = growthDS2)
-#Explained_var_Ref <- (1-VarCorr(mod7)$Ref[1]/VarCorr(mod7_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(mod7)$Ref[["(Intercept)"]]
 Ref.intercepts <- fixef(mod7)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
 for (i in 1:length(random.intercepts)) {
-  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(mod7)["Sed_level_mg_cm2_d"]*x)/(1 + exp(Ref.intercepts[i] + fixef(mod7)["Sed_level_mg_cm2_d"]*x)), 
-                    from = min(growthDS2$Sed_level_mg_cm2_d), to = max(growthDS2$Sed_level_mg_cm2_d), 
+  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(mod7)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(mod7)["Sed_level_stand_mg"]*x)), 
+                    from = min(growthDS2$Sed_level_stand_mg), to = max(growthDS2$Sed_level_stand_mg), 
                     ylim = c(0, 1), 
                     ylab = "Probability of adverse effect", 
                     xlab = "Exposure concentration, mg/cm2/d")
-  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(mod7)["Sed_level_mg_cm2_d"]*x)/(1 + exp(Ref.intercepts[i] + fixef(mod7)["Sed_level_mg_cm2_d"]*x)), add = T) 
+  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(mod7)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(mod7)["Sed_level_stand_mg"]*x)), add = T) 
 }
 
 #https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
@@ -478,7 +403,7 @@ for (i in 1:length(random.intercepts)) {
 #2^(tab)
 #                        Est        LL        UL
 #(Intercept)        0.215543 0.02925445 1.588094
-#Sed_level_mg_cm2_d 1.001081 0.99498828 1.007212
+#Sed_level_stand_mg 1.001081 0.99498828 1.007212
 
 ```
     
@@ -492,7 +417,7 @@ growthDS3 <- cbind(growthDS2, pred_mod7)
 
 growthDS_plot <- ggplot(data = growthDS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_growth,
       color = Ref)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
@@ -500,24 +425,24 @@ growthDS_plot <- ggplot(data = growthDS3) +
          color = "Study") +
     scale_x_log10(limits=c(0.01,1000),breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
-    geom_line(aes(x = Sed_level_mg_cm2_d, y = pred_mod7), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_mod7), inherit.aes=FALSE) +
     theme_bw()
 
 growthDS_plot
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 ```{r}
-#summary(growthDS2$Sed_level_mg_cm2_d)
+#summary(growthDS2$Sed_level_stand_mg)
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 #   0.02   35.95  126.70  134.49  200.00  426.80
 
-jvalues <- with(growthDS2, seq(from = min(Sed_level_mg_cm2_d), to = max(Sed_level_mg_cm2_d), length.out = 100))
+jvalues <- with(growthDS2, seq(from = min(Sed_level_stand_mg), to = max(Sed_level_stand_mg), length.out = 100))
 
 # calculate predicted probabilities and store in a list
 pp <- lapply(jvalues, function(j) {
-    growthDS2$Sed_level_mg_cm2_d <- j
+    growthDS2$Sed_level_stand_mg <- j
     predict(mod7, newdata = growthDS2, type = "response")
 })
 
@@ -529,7 +454,7 @@ plotdat <- t(sapply(pp, function(x) {
     c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
 }))
 
-# add in Sed_level_mg_cm2_d values and convert to data frame
+# add in Sed_level_stand_mg values and convert to data frame
 plotdat <- as.data.frame(cbind(plotdat, jvalues))
 
 # better names and show the first few rows
@@ -552,7 +477,7 @@ ggplot(plotdat, aes(x = Sed_conc)) +
 #by Ref
 growthDS_plot3 <- ggplot() +
     geom_point(data = growthDS2, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_growth,
       color = Ref)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
@@ -580,66 +505,66 @@ growthDS_plot3
 #Let's add a log transformation of sediment level, in case it's needed
 growthSS2 <- growthSS %>% 
   filter(Control_code=="0") %>% 
-  mutate(log10_conc=log10(Sed_level_mg_L))
+  mutate(log10_conc=log10(Sed_level_stand_mg))
 
 #Models with fixed effect(s) only
-modSS1 <- glm(Binary_reduced_growth ~ Sed_level_mg_L, 
+modSS1 <- glm(Binary_reduced_growth ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = growthSS2)
-modSS2 <- glm(Binary_reduced_growth ~ Sed_level_mg_L + Sed_exposure_days, 
+modSS2 <- glm(Binary_reduced_growth ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = growthSS2)
-modSS3 <- glm(Binary_reduced_growth ~ Sed_level_mg_L*Sed_exposure_days, 
+modSS3 <- glm(Binary_reduced_growth ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = growthSS2)
 
 #modSSels with random effect for coral species or study
-modSS4 <- glmer(Binary_reduced_growth ~ Sed_level_mg_L + (1 | Gsp), 
+modSS4 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = growthSS2)
-modSS5 <- glmer(Binary_reduced_growth ~ Sed_level_mg_L + Sed_exposure_days + (1 | Gsp), 
+modSS5 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = growthSS2)
-#modSS6 <- glmer(Binary_reduced_growth ~ Sed_level_mg_L*Sed_exposure_days + (1 | Gsp), 
+#modSS6 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp), 
 #              family = binomial, data = growthSS2)
 #Error in pwrssUpdate(pp, resp, tol = tolPwrss, GQmat = GQmat, compDev = compDev, : (maxstephalfit) PIRLS step-halvings failed to reduce deviance in pwrssUpdate
-modSS7 <- glmer(Binary_reduced_growth ~ Sed_level_mg_L + (1 | Ref), 
+modSS7 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = growthSS2)
-modSS8 <- glmer(Binary_reduced_growth ~ Sed_level_mg_L + Sed_exposure_days + (1 | Ref), 
+modSS8 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
               family = binomial, data = growthSS2)
-#modSS9 <- glmer(Binary_reduced_growth ~ Sed_level_mg_L*Sed_exposure_days + (1 | Ref), 
+#modSS9 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Ref), 
 #              family = binomial, data = growthSS2)
 #Error in pwrssUpdate(pp, resp, tol = tolPwrss, GQmat = GQmat, compDev = compDev, : (maxstephalfit) PIRLS step-halvings failed to reduce deviance in pwrssUpdate
-modSS10 <- glmer(Binary_reduced_growth ~ Sed_level_mg_L + (1 | Gsp) + (1 | Ref), 
+modSS10 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = growthSS2)
 modSS11 <- glmer(Binary_reduced_growth ~ 
-                Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = growthSS2)
 #modSS12 <- glmer(Binary_reduced_growth ~ 
-#                Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+#                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
 #              family = binomial, data = growthSS2)
 #Error in pwrssUpdate(pp, resp, tol = tolPwrss, GQmat = GQmat, compDev = compDev, : (maxstephalfit) PIRLS step-halvings failed to reduce deviance in pwrssUpdate
-modSS13 <- glmer(Binary_reduced_growth ~ Sed_level_mg_L + (1 | Ref_name/Ref), 
+modSS13 <- glmer(Binary_reduced_growth ~ Sed_level_stand_mg + (1 | Ref_name/Ref), 
               family = binomial, data = growthSS2)
 modSS14 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = growthSS2)
 #modSS15 <- glmer(Binary_reduced_growth ~ 
-#                 Sed_level_mg_L*Sed_exposure_days + (1 | Ref_name/Ref), 
+#                 Sed_level_stand_mg*Sed_exposure_days + (1 | Ref_name/Ref), 
 #              family = binomial, data = growthSS2)
 #Error in pwrssUpdate(pp, resp, tol = tolPwrss, GQmat = GQmat, compDev = compDev, : (maxstephalfit) PIRLS step-halvings failed to reduce deviance in pwrssUpdate
 modSS16 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_L + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = growthSS2)
 modSS17 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = growthSS2)
 #modSS18 <- glmer(Binary_reduced_growth ~ 
-#                 Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+#                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
 #              family = binomial, data = growthSS2)
 modSS19 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_L + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = growthSS2)
 modSS20 <- glmer(Binary_reduced_growth ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = growthSS2)
 #modSS21 <- glmer(Binary_reduced_growth ~ 
-#                 Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+#                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
 #              family = binomial, data = growthSS2)
 
 #Model comparison and summary
@@ -673,17 +598,16 @@ VarCorr(modSS8)
 exp(sqrt(VarCorr(modSS8)$Ref[1]))
 modSS8_noSed <- glmer(Binary_reduced_growth ~ 1 + (1 | Ref), 
                   family = binomial, data = growthSS2)
-#Explained_var_Ref <- (1-VarCorr(modSS8)$Ref[1]/VarCorr(modSS8_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(modSS8)$Ref[["(Intercept)"]]
 Ref.intercepts <- fixef(modSS8)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
 for (i in 1:length(random.intercepts)) {
-  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modSS8)["Sed_level_mg_L"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSS8)["Sed_level_mg_L"]*x)), 
-                    from = min(growthSS2$Sed_level_mg_L), to = max(growthSS2$Sed_level_mg_L), 
+  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modSS8)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSS8)["Sed_level_stand_mg"]*x)), 
+                    from = min(growthSS2$Sed_level_stand_mg), to = max(growthSS2$Sed_level_stand_mg), 
                     ylim = c(0, 1), 
                     ylab = "Probability of adverse effect", 
                     xlab = "Exposure concentration, mg/L)")
-  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modSS8)["Sed_level_mg_L"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSS8)["Sed_level_mg_L"]*x)), add = T) 
+  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modSS8)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSS8)["Sed_level_stand_mg"]*x)), add = T) 
 }
 
 #https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
@@ -709,7 +633,7 @@ growthSS3 <- cbind(growthSS2, pred_modSS8)
 
 growthSS_plot <- ggplot(data = growthSS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_growth,
       color = Ref)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
@@ -717,25 +641,25 @@ growthSS_plot <- ggplot(data = growthSS3) +
          color = "Study") +
     scale_x_log10(limits=c(1,1000),breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
-    geom_line(aes(x = Sed_level_mg_L, y = pred_modSS8), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_modSS8), inherit.aes=FALSE) +
     theme_bw()
 
 growthSS_plot
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 #### By sediment exposure concentration
 ```{r}
-#summary(growthSS2$Sed_level_mg_L)
+#summary(growthSS2$Sed_level_stand_mg)
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 #   1.31   15.79   49.00   78.83  165.00  199.00 
 
-jvalues <- with(growthSS2, seq(from = min(Sed_level_mg_L), to = max(Sed_level_mg_L), length.out = 100))
+jvalues <- with(growthSS2, seq(from = min(Sed_level_stand_mg), to = max(Sed_level_stand_mg), length.out = 100))
 
 # calculate predicted probabilities and store in a list
 pp <- lapply(jvalues, function(j) {
-    growthSS2$Sed_level_mg_L <- j
+    growthSS2$Sed_level_stand_mg <- j
     predict(modSS8, newdata = growthSS2, type = "response")
 })
 
@@ -747,7 +671,7 @@ plotdat <- t(sapply(pp, function(x) {
     c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
 }))
 
-# add in Sed_level_mg_L values and convert to data frame
+# add in Sed_level_stand_mg values and convert to data frame
 plotdat <- as.data.frame(cbind(plotdat, jvalues))
 
 # better names and show the first few rows
@@ -770,14 +694,14 @@ ggplot(plotdat, aes(x = Sed_conc)) +
 #by Ref
 growthSS_plot2 <- ggplot() +
     geom_point(data = growthSS2, mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_growth,
       color = Ref)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Predicted probability of reduced growth\nrate due to sediment exposure",
          color = "Binary Data\nby Study",
          linetype = "Predicted\nProbability") +
-    scale_x_log10(limits=c(1,max(growthSS2$Sed_level_mg_L)),
+    scale_x_log10(limits=c(1,max(growthSS2$Sed_level_stand_mg)),
                   breaks=c(0.01,0.1,1,10,100,1000,loaelSS),
                   label=c("0.01","0.1","1","10","100","1000",round(loaelSS,digits=1))) +
     geom_ribbon(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
