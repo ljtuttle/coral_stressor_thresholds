@@ -1,7 +1,7 @@
 ---
 title: "Binary responses of corals to sediment stress"
 author: "Lillian J. Tuttle"
-date: "8/10/2020"
+date: "9/24/2020"
 output: html_document
 ---
 
@@ -14,8 +14,7 @@ library(pROC)
 library(effects)
 library(lattice)
 library(MuMIn)
-binaryDS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/binary/binaryDS.csv", header=T)
-binarySS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/binary/binarySS.csv", header=T)
+binary <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/coral_stressor_thresholds/sediment/data/binary_ALL.csv", header=T)
 
 #keyboard shortcuts to remember: 
 #command-option-I inserts new code chunk
@@ -32,7 +31,8 @@ Specifically, we will explore the results of 1644 datapoints from 45 studies con
 
 ```{r, echo=FALSE, warning=FALSE}
 #head(binaryDS)
-binaryDS <- binaryDS %>%
+binaryDS <- binary %>%
+  filter(DS_SS=="DS") %>% 
   mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
   filter(Binary_sed_burial=="0") #remove all studies that buried corals instead of giving them a specific dosage (in mg/cm2/day)
 binaryDS %>% tally() #n=1644 datapoints, tally() returns same result as count(binaryDS)
@@ -51,10 +51,11 @@ Specifically, we will explore the results of 661 datapoints from 41 studies cond
 
 ```{r, echo=FALSE, warning=FALSE}
  #head(binarySS)
-binarySS <- binarySS %>%
+binarySS <- binary %>%
+  filter(DS_SS=="SS") %>% 
   mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
   filter(!str_detect(Ref, "SS03b")) %>% #removes only study that looked at auto/heterotrophy (Anthony & Fabricius 2000)
-  filter(!is.na(Sed_level_mg_L)) #removes studies that only report NTU and not mg/L
+  filter(!is.na(Sed_level_stand_mg)) #removes studies that only report NTU and not mg/L
 binarySS %>% tally() #n=661 datapoints, tally() returns same result as count(binarySS)
 binarySS %>% count(Ref, sort=T) #n=41 studies
 binarySS %>% count(Ref_name, sort=T) #n=22 articles, count(Ref_name) = group_by(Ref_name) %>% tally()
@@ -80,7 +81,7 @@ First let's explore all data from all species for which there is binary data abo
 
 #DEPOSITED SEDIMENT
 non_adverse <- binaryDS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_cm2_d, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Sed_days, Binary_effect_non_adverse) %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Binary_effect_non_adverse) %>% 
   filter(!is.na(Binary_effect_non_adverse)) #remove NAs (studies that did not describe non-adverse effects)
 #non_adverse %>% tally() #n=605 datapoints, tally() returns same result as count(non_adverse)
 #non_adverse %>% count(Ref_name, sort=T) #n=17 articles, count(Ref_name) = group_by(Ref_name) %>% tally()
@@ -88,8 +89,8 @@ non_adverse <- binaryDS %>%
 #non_adverse %>% count(Gsp) #n=65 species
 #non_adverse %>% count(Updated_Genus, sort=T) #n=39 genera
 non_adverse_plot <- ggplot(data=non_adverse, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
+      x = Sed_level_stand_mg, 
+      y = Sed_exposure_days,
       color = factor(Binary_effect_non_adverse),
       shape = factor(Binary_effect_non_adverse),
       position = "jitter",
@@ -111,7 +112,7 @@ non_adverse_plot <- ggplot(data=non_adverse, mapping = aes(
 
 #SUSPENDED SEDIMENT
 non_adverseSS <- binarySS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_L, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Binary_effect_non_adverse) %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Binary_effect_non_adverse) %>% 
   filter(!is.na(Binary_effect_non_adverse)) #remove NAs (studies that did not describe non-adverse effects)
 #non_adverseSS %>% tally() #n=125 datapoints, tally() returns same result as count(non_adverse)
 #non_adverseSS %>% count(Ref, sort=T) #n=6 studies
@@ -120,7 +121,7 @@ non_adverseSS <- binarySS %>%
 #non_adverseSS %>% count(Updated_Genus, sort=T) #n=6 genera, top four: Acropora n=77, Montipora n=33, Merulina n=4, Pachyseris n=4
 
 non_adverseSS_plot <- ggplot(data=non_adverseSS, mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Sed_exposure_days,
       color = factor(Binary_effect_non_adverse),
       shape = factor(Binary_effect_non_adverse),
@@ -147,7 +148,7 @@ non_adverseSS_plot <- ggplot(data=non_adverseSS, mapping = aes(
 
 #DEPOSITED SEDIMENT
 adverse <- binaryDS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_cm2_d, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Sed_days, Binary_effect_adverse, Coral_age_class) %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Binary_effect_adverse, Coral_age_class) %>% 
   filter(!is.na(Binary_effect_adverse)) #remove NAs (studies that did not describe adverse effects)
 #adverse %>% tally() #n=1256 datapoints, tally() returns same result as count(adverse)
 #adverse %>% count(Ref, sort=T) #n=38 studies
@@ -155,8 +156,8 @@ adverse <- binaryDS %>%
 #adverse %>% count(Gsp) #n=91 species
 #adverse %>% count(Updated_Genus) #n=44 genera
 adverse_plot <- ggplot(data=adverse, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
+      x = Sed_level_stand_mg, 
+      y = Sed_exposure_days,
       color = factor(Binary_effect_adverse),
       shape = factor(Binary_effect_adverse),
       position = "jitter",
@@ -178,7 +179,7 @@ adverse_plot <- ggplot(data=adverse, mapping = aes(
 
 #SUSPENDED SEDIMENT
 adverseSS <- binarySS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_L, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Binary_effect_adverse, Coral_age_class) %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Binary_effect_adverse, Coral_age_class) %>% 
   filter(!is.na(Binary_effect_adverse)) #remove NAs (studies that did not describe adverse effects)
 #adverseSS %>% tally() #n=585 datapoints, tally() returns same result as count(adverse)
 #adverseSS %>% count(Ref, sort=T) #n=37 studies,
@@ -186,7 +187,7 @@ adverseSS <- binarySS %>%
 #adverseSS %>% count(Gsp) #n=26 species
 #adverseSS %>% count(Updated_Genus, sort=T) #n=18 genera, top four: Acropora n=87, Merulina n=54, Pachyseris n=54, Platygyra n=54	
 adverseSS_plot <- ggplot(data=adverseSS, mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Sed_exposure_days,
       color = factor(Binary_effect_adverse),
       shape = factor(Binary_effect_adverse),
@@ -213,7 +214,7 @@ adverseSS_plot <- ggplot(data=adverseSS, mapping = aes(
 
 #DEPOSITED SEDIMENT
 any_mort <- binaryDS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_cm2_d, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Sed_days, Binary_sed_burial, Binary_effect_mortality) %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Binary_sed_burial, Binary_effect_mortality) %>% 
   filter(!is.na(Binary_effect_mortality)) #remove NAs (studies that did not describe total mortality)
 #any_mort %>% tally() #n=906 datapoints, tally() returns same result as count(any_mort)
 #any_mort %>% count(Ref, sort=T) #n=30 studies
@@ -221,8 +222,8 @@ any_mort <- binaryDS %>%
 #any_mort %>% count(Gsp) #n=81 species
 #any_mort %>% count(Updated_Genus, sort=T) #n=41 genera
 any_mort_plot <- ggplot(data=any_mort, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
+      x = Sed_level_stand_mg, 
+      y = Sed_exposure_days,
       color = factor(Binary_effect_mortality),
       shape = factor(Binary_effect_mortality),
       position = "jitter",
@@ -244,7 +245,7 @@ any_mort_plot <- ggplot(data=any_mort, mapping = aes(
 
 #SUSPENDED SEDIMENT
 any_mortSS <- binarySS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_L, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Binary_effect_mortality) %>%
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Binary_effect_mortality) %>%
   filter(!is.na(Binary_effect_mortality)) #remove NAs (studies that did not describe total mortality)
 #any_mortSS %>% tally() #n=376 datapoints, tally() returns same result as count(any_mort)
 #any_mortSS %>% count(Ref, sort=T) #n=19 studies
@@ -252,7 +253,7 @@ any_mortSS <- binarySS %>%
 #any_mortSS %>% count(Gsp) #n=21 species
 #any_mortSS %>% count(Updated_Genus, sort=T) #n=15 genera, top five: Merulina n=50, Pachyseris n=50, Platygyra n=50, Acropora n=37
 any_mortSS_plot <- ggplot(data=any_mortSS, mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Sed_exposure_days,
       color = factor(Binary_effect_mortality),
       shape = factor(Binary_effect_mortality),
@@ -299,387 +300,6 @@ any_mortSS_plot + geom_point(data = subset(any_mortSS, Binary_effect_mortality==
 ```
   
   
-### Exploring the same plots with PLOTLY...  
-
-##### Non-adverse effects
-**Legend**: Non-adverse effects due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different genera.  
-  
-**Deposited sediment**: All species, n=605 datapoints, n=17 studies, n=39 genera
-```{r, echo=FALSE, warning=FALSE}
-#DEPOSITED SEDIMENT
-non_adverse_plot2 <- ggplot(data=non_adverse) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      shape = factor(Binary_effect_non_adverse),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
-         y = "Exposure duration (days)",
-         shape = "Non-adverse effects due\nto sedimentation?",
-         color = "Genus") +
-    scale_x_log10(limits=c(0.1,1000), breaks=c(0.1,1,10,100,1000),
-                  label=c("0.1","1","10","100","1000")) +
-    scale_y_log10(limits=c(0.1,100), breaks=c(0.1,1,10,100),
-                  label=c("0.1","1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-non_adverse_plotly <- ggplotly(non_adverse_plot2, tooltip="text")
-#non_adverse_plotly #plot where I can hover over points and get species, but legend cut-off
-#Error in gsub("\n", br(), a, fixed = TRUE) : input string 1 is invalid in this locale
-```
-But there is the following error:  
-"Error in gsub("\n", br(), a, fixed = TRUE) : input string 1 is invalid in this locale"
-  
-**Suspended sediment**: All species, n=125 datapoints, n=4 studies, n=6 genera
-```{r, echo=FALSE, warning=FALSE}
-#SUSPENDED SEDIMENT
-non_adverseSS_plot2 <- ggplot(data=non_adverseSS) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Sed_exposure_days,
-      shape = factor(Binary_effect_non_adverse),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/L)", 
-         y = "Exposure duration (days)",
-         color = "Non-adverse effects due\nto suspended sediment?") +
-    scale_x_log10(limits=c(0.1,1000), breaks=c(0.01,0.1,1,10,100,1000),
-                  label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(limits=c(0.1,100), breaks=c(0.01,0.1,1,10,100), 
-                  label=c("0.01","0.1","1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-non_adverseSS_plotly <- ggplotly(non_adverseSS_plot2, tooltip="text")
-non_adverseSS_plotly
-```
-  
-  
-  
-##### Adverse effects 
-**Legend**: Adverse effects due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different genera.
-  
-**Deposited sediment**: All species, n=1256 datapoints, n=40 studies, n=51 genera
-```{r, echo=FALSE, warning=FALSE}
-adverse_plot2 <- ggplot(data=adverse) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      shape = factor(Binary_effect_adverse),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
-         y = "Exposure duration (days)",
-         shape = "Adverse effects due\nto sediment?",
-         color = "Genus") +
-    scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000), 
-                  label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(limits=c(0.1,200), breaks=c(0.01,0.1,1,10,100),
-                  label=c("0.01","0.1","1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-adverse_plotly <- ggplotly(adverse_plot2, tooltip="text")
-#adverse_plotly #plot where I can hover over points and get species, but legend cut-off
-```
-But there is the following error:  
-Error when try to plot, need to revisit: "Error in gsub("\n", br(), a, fixed = TRUE) : input string 1 is invalid in this locale"  
-    
-**Suspended sediment**: All species, n=585 datapoints, n=37 studies, n=18 genera
-```{r, echo=FALSE, warning=FALSE}
-adverseSS_plot2 <- ggplot(data=adverseSS) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Sed_exposure_days,
-      shape = factor(Binary_effect_adverse),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/L)", 
-         y = "Exposure duration (days)",
-         shape = "Adverse effects due to\nsuspended sediment?",
-         color = "Genus") +
-    scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000), 
-                  label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(breaks=c(0.01,0.1,1,10,100),
-                  label=c("0.01","0.1","1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-adverseSS_plotly <- ggplotly(adverseSS_plot2, tooltip="text")
-adverseSS_plotly #plot where I can hover over points and get species, but legend cut-off
-```
-  
-  
-##### Any mortality
-**Legend**: Any mortality due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different genera.
-  
-**Deposited sediment**: All species, n=906 datapoints, n=31 studies, n=47 genera
-```{r, echo=FALSE, warning=FALSE}
-any_mort_plot2 <- ggplot(data=any_mort) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      shape = factor(Binary_effect_mortality),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/cm^2/day)", 
-         y = "Exposure duration (days)",
-         shape = "Any mortality due\nto sedimentation?",
-         color = "Genus") +
-    scale_x_log10(breaks=c(0.01,0.1,1,10,100,1000),
-                  label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(limits=c(0.1,200), breaks=c(0.1,1,10,100),
-                  label=c("0.1","1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-any_mort_plotly <- ggplotly(any_mort_plot2, tooltip="text")
-any_mort_plotly #plot where I can hover over points and get species, but legend cut-off
-```
-  
-**Suspended sediment**: All species, n=376 datapoints, n=19 studies, n=15 genera
-```{r, echo=FALSE, warning=FALSE}
-any_mortSS_plot2 <- ggplot(data=any_mortSS) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Sed_exposure_days,
-      shape = factor(Binary_effect_mortality),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/L)", 
-         y = "Exposure duration (days)",
-         shape = "Any mortality due to\nsuspended sediment?",
-         color = "Genus") +
-    scale_x_log10(limits=c(0.1,200), breaks=c(0.01,0.1,1,10,100), 
-                  label=c("0.01","0.1","1","10","100")) +
-    scale_y_log10(limits=c(1,300), breaks=c(0.01,0.1,1,10,100),
-                  label=c("0.01","0.1","1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-any_mortSS_plotly <- ggplotly(any_mortSS_plot2, tooltip="text")
-any_mortSS_plotly #plot where I can hover over points and get species, but legend cut-off
-```  
-  
-  
-### *Montipora* spp. only for Deposited Sediment  
-*Montipora* is the genus with the most data and appears to be among the most sensitive, so let's explore it individually:
-
-```{r, echo=FALSE, warning=FALSE}
-nadv_montipora <- non_adverse %>% 
-  filter(Updated_Genus=="Montipora")
-#nadv_montipora %>% tally() #n=207 datapoints, tally() returns same result as count(nadv_montipora)
-#nadv_montipora %>% count(Ref_name, sort=T) #n=5 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-#nadv_montipora %>% count(Gsp, sort=T) #n=6 species, same as nlevels(as.factor(nadv_montipora$Gsp))
-  
-nadv_mont_plot <- ggplot(data=nadv_montipora) +
-  geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      color = factor(Binary_effect_non_adverse),
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/cm^2/day)", 
-         y = "Exposure duration (days)",
-         color = "Non-adverse effects due\nto sedimentation?") +
-    scale_x_log10(limits=c(0.1,1000), breaks=c(0.01,0.1,1,10,100,1000),
-                  label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(limits=c(0.1,100), breaks=c(0.1,1,10,100),
-                  label=c("0.1","1","10","100")) +
-    scale_color_manual(breaks = c("0","1"), values = c("blue", "red")) +
-    theme_bw()
-
-
-adv_montipora <- adverse %>% 
-  filter(Updated_Genus=="Montipora")
-#adv_montipora %>% tally() #n=307 datapoints, tally() returns same result as count(nadv_montipora)
-#adv_montipora %>% count(Ref_name, sort=T) #n=13 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-#adv_montipora %>% count(Gsp, sort=T) #n=14 species, same as nlevels(as.factor(nadv_montipora$Gsp))
-
-adv_mont_plot <- ggplot(data=adv_montipora) +
-  geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      color = factor(Binary_effect_adverse),
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/cm^2/day)", 
-         y = "Exposure duration (days)",
-         color = "Adverse effects due\nto sedimentation?") +
-    scale_x_log10(limits=c(0.1,1000), breaks=c(0.1,1,10,100,1000),
-                  label=c("0.1","1","10","100","1000")) +
-    scale_y_log10(limits=c(0.1,200), breaks=c(0.1,1,10,100),
-                  label=c("0.1","1","10","100")) +
-    scale_color_manual(breaks = c("0","1"), values = c("blue", "red")) +
-    theme_bw()
-
-
-any_mort_montipora <- any_mort %>% 
-  filter(Updated_Genus=="Montipora")
-#any_mort_montipora %>% tally() #n=137 datapoints, tally() returns same result as count(nadv_montipora)
-#any_mort_montipora %>% count(Ref_name, sort=T) #n=11 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-#any_mort_montipora %>% count(Gsp, sort=T) #n=12 species, same as nlevels(as.factor(nadv_montipora$Gsp))
-
-any_mort_mont_plot <- ggplot(data=any_mort_montipora) +
-  geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      color = factor(Binary_effect_mortality),
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/cm^2/day)",  
-         y = "Exposure duration (days)",
-         color = "Any mortality due\nto sedimentation?") +
-    scale_x_log10(limits=c(0.1,1000), breaks=c(0.01,0.1,1,10,100,1000),
-                  label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(limits=c(0.1,200), breaks=c(0.01,0.1,1,10,100),
-                  label=c("0.01","0.1","1","10","100")) +
-    scale_color_manual(breaks = c("0","1"), values = c("blue", "red")) +
-    theme_bw()
-
-
-#PLOTS:
-#nadv_mont_plot + ggtitle("Non-adverse effects, Montipora spp. only,\nn=207 datapoints, n=5 studies, n=6 spp.")
-#adv_mont_plot + ggtitle("Adverse effects, Montipora spp. only,\nn=307 datapoints, n=13 studies, n=14 spp.")
-#any_mort_mont_plot + ggtitle("Any mortality, Montipora spp. only,\nn=137 datapoints, n=11 studies, n=12 spp.")
-```
-
-##### Non-adverse effects, Montipora spp. only,\nn=207 datapoints, n=5 studies, n=6 spp.
-**Legend**: Non-adverse effects due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
-```{r, echo=FALSE, warning=FALSE}
-#PLOTS:
-nadv_mont_plotly <- ggplotly(nadv_mont_plot, tooltip= c("x", "y", "text"))
-nadv_mont_plotly
-```
-
-##### Adverse effects, Montipora spp. only,\nn=307 datapoints, n=13 studies, n=14 spp.
-**Legend**: Adverse effects due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
-```{r, echo=FALSE, warning=FALSE}
-#PLOTS:
-adv_mont_plotly <- ggplotly(adv_mont_plot, tooltip= c("x", "y", "text"))
-adv_mont_plotly
-```
-
-##### Any mortality, Montipora spp. only,\nn=137 datapoints, n=11 studies, n=12 spp.
-**Legend**: Any mortality due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
-```{r, echo=FALSE, warning=FALSE}
-#PLOTS:
-any_mort_mont_plotly <- ggplotly(any_mort_mont_plot, tooltip= c("x", "y", "text"))
-any_mort_mont_plotly
-```
-  
-  
-### *Acropora* spp. only for Suspended Sediment  
-*Acropora* is the genus with the most data and appears to be among the most sensitive, so let's explore it individually:
-
-```{r, echo=FALSE, warning=FALSE}
-nadv_Acropora <- non_adverseSS %>% 
-  filter(Updated_Genus=="Acropora")
-#nadv_Acropora %>% tally() #n=77 datapoints, tally() returns same result as count(nadv_Acropora)
-#nadv_Acropora %>% count(Ref_name, sort=T) #n=3 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-#nadv_Acropora %>% count(Gsp, sort=T) #n=2 species, same as nlevels(as.factor(nadv_Acropora$Gsp))
-  
-nadv_acro_plot <- ggplot(data=nadv_Acropora) +
-  geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Sed_exposure_days,
-      color = factor(Binary_effect_non_adverse),
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/L)", 
-         y = "Exposure duration (days)",
-         color = "Non-adverse effects due to\n suspended sediment?") +
-    scale_x_log10(limits=c(0.1,1000), breaks=c(0.01,0.1,1,10,100,1000), label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(limits=c(0.1,100), breaks=c(0.01,0.1,1,10,100), 
-                  label=c("0.01","0.1","1","10","100")) +
-    scale_color_manual(breaks = c("0","1"), values = c("blue", "red")) +
-    theme_bw()
-
-
-adv_Acropora <- adverseSS %>% 
-  filter(Updated_Genus=="Acropora")
-#adv_Acropora %>% tally() #n=87 datapoints, tally() returns same result as count(nadv_Acropora)
-#adv_Acropora %>% count(Ref_name, sort=T) #n=4 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-#adv_Acropora %>% count(Gsp, sort=T) #n=3 species, same as nlevels(as.factor(nadv_Acropora$Gsp))
-
-adv_acro_plot <- ggplot(data=adv_Acropora) +
-  geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Sed_exposure_days,
-      color = factor(Binary_effect_adverse),
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/L)", 
-         y = "Exposure duration (days)",
-         color = "Adverse effects due to\nsuspended sediment?") +
-    scale_x_log10(limits=c(0.1,1000), breaks=c(0.01,0.1,1,10,100,1000), label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(limits=c(0.1,100), breaks=c(0.01,0.1,1,10,100), 
-                  label=c("0.01","0.1","1","10","100")) +
-    scale_color_manual(breaks = c("0","1"), values = c("blue", "red")) +
-    theme_bw()
-
-
-any_mort_Acropora <- any_mortSS %>% 
-  filter(Updated_Genus=="Acropora")
-#any_mort_Acropora %>% tally() #n=37 datapoints, tally() returns same result as count(nadv_Acropora)
-#any_mort_Acropora %>% count(Ref_name, sort=T) #n=3 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-#any_mort_Acropora %>% count(Gsp, sort=T) #n=2 species, same as nlevels(as.factor(nadv_Acropora$Gsp))
-
-any_mort_acro_plot <- ggplot(data=any_mort_Acropora) +
-  geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
-      y = Sed_exposure_days,
-      color = factor(Binary_effect_mortality),
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sediment exposure concentration (mg/L)", 
-         y = "Exposure duration (days)",
-         color = "Any mortality due to\nsuspended sediment?") +
-    scale_x_log10(limits=c(0.1,1000), breaks=c(0.01,0.1,1,10,100,1000), label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_continuous(limits=c(0, 100)) +
-    scale_color_manual(breaks = c("0","1"), values = c("blue", "red")) +
-    theme_bw()
-
-
-#PLOTS:
-#nadv_acro_plot + labs(
-#  title = "Suspended sediment, Non-adverse effects, Acropora spp. only", 
-#  subtitle = "n=77 datapoints, n=3 studies, n=2 spp.")
-#adv_acro_plot + labs(
-#  title = "Suspended sediment, Adverse effects, Acropora spp. only", 
-#  subtitle = "n=87 datapoints, n=4 studies, n=3 spp.")
-#any_mort_acro_plot + labs(
-#  title = "Suspended sediment, Any mortality, Acropora spp. only",
-#  subtitle = "n=37 datapoints, n=3 studies, n=2 spp.")
-```
-
-##### Non-adverse effects, Acropora spp. only,\nn=77 datapoints, n=3 studies, n=2 spp.
-**Legend**: Non-adverse effects due to suspended sediment? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
-```{r, echo=FALSE, warning=FALSE}
-#PLOTS:
-nadv_acro_plotly <- ggplotly(nadv_acro_plot, tooltip= c("x", "y", "text"))
-nadv_acro_plotly
-```
-
-##### Adverse effects, Acropora spp. only,\nn=87 datapoints, n=4 studies, n=3 spp.
-**Legend**: Adverse effects due to suspended sediment? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
-```{r, echo=FALSE, warning=FALSE}
-#PLOTS:
-adv_acro_plotly <- ggplotly(adv_acro_plot, tooltip= c("x", "y", "text"))
-adv_acro_plotly
-```
-
-##### Any mortality, Acropora spp. only,\nn=37 datapoints, n=3 studies, n=2 spp.
-**Legend**: Any mortality due to suspended sediment? Empty circles are no (0), and filled squares are yes (1). Colors are for different species.
-```{r, echo=FALSE, warning=FALSE}
-#PLOTS:
-any_mort_acro_plotly <- ggplotly(any_mort_acro_plot, tooltip= c("x", "y", "text"))
-any_mort_acro_plotly
-```
-   
-  
 # Threshold Analyses with Binary Data 
 Now let's calculate thresholds based on the binary data explored above.  
 
@@ -696,27 +316,27 @@ Now let's calculate thresholds based on the binary data explored above.
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_adverse <- adverse %>% 
   filter(Binary_effect_adverse=="1") %>%
-  arrange(Sed_level_mg_cm2_d) %>% #minimum Sedimentation level is 0! --> Looked at this particular row, and it is from Hodel 2007 who studied the recovery period post-exposure (hence sed level is 0 but still experiencing mortality). Therefore, this will not be an accurate LOAEL
-  filter(Sed_level_mg_cm2_d>0) #removed Hodel sample described above
+  arrange(Sed_level_stand_mg) %>% #minimum Sedimentation level is 0! --> Looked at this particular row, and it is from Hodel 2007 who studied the recovery period post-exposure (hence sed level is 0 but still experiencing mortality). Therefore, this will not be an accurate LOAEL
+  filter(Sed_level_stand_mg>0) #removed Hodel sample described above
 
 #LOAEL
-summarize(adverse_adverse, LOAEL=min(Sed_level_mg_cm2_d)) #LOAEL is 1 and comes from Sofonia (2006) PhD Chapter 4: Montipora_tuberculosa, 15 days exposure
-loael <- adverse_adverse %>% summarize(min(Sed_level_mg_cm2_d))
+summarize(adverse_adverse, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 1 and comes from Sofonia (2006) PhD Chapter 4: Montipora_tuberculosa, 15 days exposure
+loael <- adverse_adverse %>% summarize(min(Sed_level_stand_mg))
 loael <- as.numeric(loael)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_adverse <- adverse %>%
   filter(Binary_effect_adverse=="0") %>%
-  arrange(desc(Sed_level_mg_cm2_d)) %>%
-  filter(Sed_level_mg_cm2_d<=1) #less than or equal to the LOAEL, which = 1
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=1) #less than or equal to the LOAEL, which = 1
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_adverse, NOAEL=max(Sed_level_mg_cm2_d)) #NOAEL is 1
+summarize(non_adverse_adverse, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 1
 
-#PLOTbleachDS
+#PLOT
 ggplot(data = adverse) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_adverse)) + 
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
          y = "Adverse effect due to sedimentation?\n(0 = no, 1 = yes)") +
@@ -730,18 +350,18 @@ ggplot(data = adverse) +
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_adverse2 <- adverse %>% 
   filter(Binary_effect_adverse=="1") %>% 
-  filter(!is.na(Sed_days))
+  filter(!is.na(Sed_exposure_days))
 
 #LOAEL
-summarize(adverse_adverse2, LOAEL=min(Sed_days)) #LOAEL is 0.5 day
+summarize(adverse_adverse2, LOAEL=min(Sed_exposure_days)) #LOAEL is 0.5 day
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_adverse2 <- adverse %>%
   filter(Binary_effect_adverse=="0") %>%
-  filter(Sed_days<=0.5) #less than or equal to the LOAEL, which = 0.5
+  filter(Sed_exposure_days<=0.5) #less than or equal to the LOAEL, which = 0.5
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_adverse2, NOAEL=max(Sed_days)) #NOAEL is 0.5 day
+summarize(non_adverse_adverse2, NOAEL=max(Sed_exposure_days)) #NOAEL is 0.5 day
 
 #PLOT LOAELs
 adverse_plot + geom_point(data = subset(adverse, Binary_effect_adverse=="1")) +
@@ -756,27 +376,27 @@ adverse_plot + geom_point(data = subset(adverse, Binary_effect_adverse=="1")) +
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_any_mort <- any_mort %>% 
   filter(Binary_effect_mortality=="1") %>%
-  arrange(Sed_level_mg_cm2_d) %>% #minimum Sedimentation level is 0! --> Looked at this particular row, and it is from Hodel 2007 who studied the recovery period post-exposure (hence sed level is 0 but still experiencing mortality). Therefore, this will not be an accurate LOAEL
-  filter(Sed_level_mg_cm2_d>0) #removed Hodel sample described above
+  arrange(Sed_level_stand_mg) %>% #minimum Sedimentation level is 0! --> Looked at this particular row, and it is from Hodel 2007 who studied the recovery period post-exposure (hence sed level is 0 but still experiencing mortality). Therefore, this will not be an accurate LOAEL
+  filter(Sed_level_stand_mg>0) #removed Hodel sample described above
 
 #LOAEL
-summarize(adverse_any_mort, LOAEL=min(Sed_level_mg_cm2_d)) ##LOAEL is 4.9 and comes from Sofonia (2006) PhD Chapter 4: Montipora_tuberculosa, 15 days exposure
-loael2 <- adverse_any_mort %>% summarize(min(Sed_level_mg_cm2_d))
+summarize(adverse_any_mort, LOAEL=min(Sed_level_stand_mg)) ##LOAEL is 4.9 and comes from Sofonia (2006) PhD Chapter 4: Montipora_tuberculosa, 15 days exposure
+loael2 <- adverse_any_mort %>% summarize(min(Sed_level_stand_mg))
 loael2 <- as.numeric(loael2)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_any_mort <- any_mort %>%
   filter(Binary_effect_mortality=="0") %>%
-  arrange(desc(Sed_level_mg_cm2_d)) %>%
-  filter(Sed_level_mg_cm2_d<=4.9) #less than or equal to the LOAEL, which = 4.9
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=4.9) #less than or equal to the LOAEL, which = 4.9
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_any_mort, NOAEL=max(Sed_level_mg_cm2_d)) #NOAEL is 4.4
+summarize(non_adverse_any_mort, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 4.4
 
 #PLOT
 ggplot(data = any_mort) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_mortality)) + 
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
          y = "Any mortality\ndue to sedimentation?") +
@@ -790,19 +410,19 @@ ggplot(data = any_mort) +
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_any_mort2 <- any_mort %>% 
   filter(Binary_effect_mortality=="1") %>% 
-  filter(!is.na(Sed_days)) %>% 
-  arrange(Sed_days) 
+  filter(!is.na(Sed_exposure_days)) %>% 
+  arrange(Sed_exposure_days) 
 
 #LOAEL
-summarize(adverse_any_mort2, LOAEL=min(Sed_days)) #LOAEL is 0.917 day = 22h
+summarize(adverse_any_mort2, LOAEL=min(Sed_exposure_days)) #LOAEL is 0.917 day = 22h
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_any_mort2 <- any_mort %>%
   filter(Binary_effect_mortality=="0") %>%
-  filter(Sed_days<=0.917) #less than or equal to the LOAEL, which = 0.917
+  filter(Sed_exposure_days<=0.917) #less than or equal to the LOAEL, which = 0.917
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_any_mort2, NOAEL=max(Sed_days)) #NOAEL is 0.917 day
+summarize(non_adverse_any_mort2, NOAEL=max(Sed_exposure_days)) #NOAEL is 0.917 day
 
 #PLOT LOAELs
 any_mort_plot + geom_point(data = subset(any_mort, Binary_effect_mortality=="1")) +
@@ -818,27 +438,27 @@ any_mort_plot + geom_point(data = subset(any_mort, Binary_effect_mortality=="1")
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_adverseSS <- adverseSS %>% 
   filter(Binary_effect_adverse=="1") %>%
-  arrange(Sed_level_mg_L) %>% 
-  filter(!is.na(Sed_level_mg_L))
+  arrange(Sed_level_stand_mg) %>% 
+  filter(!is.na(Sed_level_stand_mg))
 
 #LOAEL
-summarize(adverse_adverseSS, LOAEL=min(Sed_level_mg_L)) #LOAEL is 3.22 and comes from Flores et al. 2012: Montipora aequituberculata, 84 days exposure
-loaelSS <- adverse_adverseSS %>% summarize(min(Sed_level_mg_L))
+summarize(adverse_adverseSS, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 3.22 and comes from Flores et al. 2012: Montipora aequituberculata, 84 days exposure
+loaelSS <- adverse_adverseSS %>% summarize(min(Sed_level_stand_mg))
 loaelSS <- as.numeric(loaelSS)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_adverseSS <- adverseSS %>%
   filter(Binary_effect_adverse=="0") %>%
-  arrange(desc(Sed_level_mg_L)) %>%
-  filter(Sed_level_mg_L<=3.22) #less than or equal to the LOAEL, which = 3.22
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=3.22) #less than or equal to the LOAEL, which = 3.22
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_adverseSS, NOAEL=max(Sed_level_mg_L)) #NOAEL is 3.22
+summarize(non_adverse_adverseSS, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 3.22
 
 #PLOT
 ggplot(data = adverseSS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_adverse)) + 
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Adverse effect due to suspended sediment?\n(0 = no, 1 = yes)") +
@@ -852,7 +472,7 @@ ggplot(data = adverseSS) +
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_adverseSS3 <- adverseSS %>% 
   filter(Binary_effect_adverse=="1") %>%
-  filter(!is.na(Sed_level_mg_L)) %>%
+  filter(!is.na(Sed_level_stand_mg)) %>%
   arrange(Sed_exposure_days) %>% 
   filter(Coral_age_class=='adult' | Coral_age_class=='juvenile')
 
@@ -881,26 +501,26 @@ adverseSS_plot + geom_point(data = subset(adverseSS, Binary_effect_adverse=="1")
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverseSS_any_mort <- any_mortSS %>% 
   filter(Binary_effect_mortality=="1") %>%
-  arrange(Sed_level_mg_L)
+  arrange(Sed_level_stand_mg)
 
 #LOAEL
-summarize(adverseSS_any_mort, LOAEL=min(Sed_level_mg_L)) #LOAEL is 3.22 and comes from Flores et al. 2012: Montipora aequituberculata, 84 days exposure
-loaelSS2 <- adverseSS_any_mort %>% summarize(min(Sed_level_mg_L))
+summarize(adverseSS_any_mort, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 3.22 and comes from Flores et al. 2012: Montipora aequituberculata, 84 days exposure
+loaelSS2 <- adverseSS_any_mort %>% summarize(min(Sed_level_stand_mg))
 loaelSS2 <- as.numeric(loaelSS2)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverseSS_any_mort <- any_mortSS %>%
   filter(Binary_effect_mortality=="0") %>%
-  arrange(desc(Sed_level_mg_L)) %>%
-  filter(Sed_level_mg_L<=3.22) #less than or equal to the LOAEL, which = 3.22
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=3.22) #less than or equal to the LOAEL, which = 3.22
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverseSS_any_mort, NOAEL=max(Sed_level_mg_L)) #NOAEL is 3.22
+summarize(non_adverseSS_any_mort, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 3.22
 
 #PLOT
 ggplot(data = any_mortSS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_mortality)) + 
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Any mortality\ndue to suspended sediment?") +
@@ -942,67 +562,67 @@ any_mortSS_plot + geom_point(data = subset(any_mortSS, Binary_effect_mortality==
 ```{r, echo=FALSE, warning=FALSE}
 #Let's add a log transformation of sediment level, in case it's needed
 adverseDS3 <- adverse %>% 
-  mutate(log10_conc=log10(Sed_level_mg_cm2_d)) %>% 
+  mutate(log10_conc=log10(Sed_level_stand_mg)) %>% 
   filter(Control_code=="0")
 adverseDS3 %>% tally()
 #adverseDS3 %>% count(Ref_name)
 #adverseDS3 %>% count(Ref)
-adverseDS3 <- adverseDS3 %>% filter(!is.na(Sed_days))
+adverseDS3 <- adverseDS3 %>% filter(!is.na(Sed_exposure_days))
 
 #Models with fixed effect(s) only
-modDS1 <- glm(Binary_effect_adverse ~ Sed_level_mg_cm2_d, 
+modDS1 <- glm(Binary_effect_adverse ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = adverseDS3)
-modDS2 <- glm(Binary_effect_adverse ~ Sed_level_mg_cm2_d + Sed_days, 
+modDS2 <- glm(Binary_effect_adverse ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = adverseDS3)
-modDS3 <- glm(Binary_effect_adverse ~ Sed_level_mg_cm2_d*Sed_days, 
+modDS3 <- glm(Binary_effect_adverse ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = adverseDS3)
 
 #models with random effect for coral species or study
-modDS4 <- glmer(Binary_effect_adverse ~ Sed_level_mg_cm2_d + (1 | Gsp), 
+modDS4 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = adverseDS3)
-modDS5 <- glmer(Binary_effect_adverse ~ Sed_level_mg_cm2_d + Sed_days + (1 | Gsp), 
+modDS5 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = adverseDS3)
-modDS6 <- glmer(Binary_effect_adverse ~ Sed_level_mg_cm2_d*Sed_days + (1 | Gsp), 
+modDS6 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = adverseDS3)
-modDS7 <- glmer(Binary_effect_adverse ~ Sed_level_mg_cm2_d + (1 | Ref), 
+modDS7 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = adverseDS3)
-modDS8 <- glmer(Binary_effect_adverse ~ Sed_level_mg_cm2_d + Sed_days + (1 | Ref), 
+modDS8 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
               family = binomial, data = adverseDS3)
-modDS9 <- glmer(Binary_effect_adverse ~ Sed_level_mg_cm2_d*Sed_days + (1 | Ref), 
+modDS9 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Ref), 
               family = binomial, data = adverseDS3)
-modDS10 <- glmer(Binary_effect_adverse ~ Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref), 
+modDS10 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = adverseDS3)
 modDS11 <- glmer(Binary_effect_adverse ~ 
-                Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = adverseDS3)
 modDS12 <- glmer(Binary_effect_adverse ~ 
-                Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = adverseDS3)
-modDS13 <- glmer(Binary_effect_adverse ~ Sed_level_mg_cm2_d + (1 | Ref_name/Ref), 
+modDS13 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + (1 | Ref_name/Ref), 
               family = binomial, data = adverseDS3)
 modDS14 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_cm2_d + Sed_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = adverseDS3)
 modDS15 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_cm2_d*Sed_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = adverseDS3)
 modDS16 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = adverseDS3)
 modDS17 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = adverseDS3)
 modDS18 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = adverseDS3)
 modDS19 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = adverseDS3)
 modDS20 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = adverseDS3)
 modDS21 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = adverseDS3)
 
 #Model comparison and summary
@@ -1014,7 +634,7 @@ print(summary(modDS11), correlation=FALSE)
 
 #Trying out a log transformation of predictor...
 modDS11_log <- glmer(Binary_effect_adverse ~ 
-                       log10_conc + Sed_days + (1 | Gsp) + (1 | Ref), 
+                       log10_conc + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
                      family = binomial, data = adverseDS3)
 print(summary(modDS11_log), correlation=FALSE)
 #No errors
@@ -1044,7 +664,6 @@ VarCorr(modDS11_log)
 exp(sqrt(VarCorr(modDS11_log)$Ref[1])) #I think this means that two observations from different studies typically differ by a factor of exp(sd) = 
 modDS11_log_noSed <- glmer(Binary_effect_adverse ~ 1 + (1 | Gsp) + (1 | Ref), 
                            family = binomial, data = adverseDS3)
-#Explained_var_Ref <- (1-VarCorr(modDS11_log)$Ref[1]/VarCorr(modDS11_log_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(modDS11_log)$Ref[["(Intercept)"]]
 Ref.intercepts <- fixef(modDS11_log)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
@@ -1068,7 +687,7 @@ tab <- cbind(Est = fixef(modDS11_log),
              LL = fixef(modDS11_log) - 1.96 * se, 
              UL = fixef(modDS11_log) + 1.96 * se)
 exp(tab) #for log10_conc
-10^(tab) #for Sed_days
+10^(tab) #for Sed_exposure_days
 ```
     
 For every 10-fold increase in exposure concentration of deposited sediment, the odds of an adverse effect increase by 3.4 times (95% CI 2.2, 5.5, GLMM z = 5.168, p < 0.0001), while holding exposure duration constant and accounting for variability among studies and species. For every 10-fold increase in exposure duration of deposited sediment, the odds of an adverse effect increase by 1.05 times (95% CI 1.03, 1.07, GLMM z = 4.559, p < 0.0001), while holding exposure concentration constant and accounting for variability among studies and species.
@@ -1081,20 +700,20 @@ adverseDS3 <- cbind(adverseDS3, pred_modDS11_log)
 
 adverseDS_plot <- ggplot(data = adverseDS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_adverse)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
          y = "Adverse effects due to sediment exposure?") +
-    scale_x_log10(limits=c(0.01,max(adverseDS3$Sed_level_mg_cm2_d)),
+    scale_x_log10(limits=c(0.01,max(adverseDS3$Sed_level_stand_mg)),
                   breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
-    geom_line(aes(x = Sed_level_mg_cm2_d, y = pred_modDS11_log), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_modDS11_log), inherit.aes=FALSE) +
     theme_bw()
 
 adverseDS_plot
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 ```{r}
 jvalues <- with(adverseDS3, seq(from = min(log10_conc), to = max(log10_conc), length.out = 100))
@@ -1147,12 +766,12 @@ ggplot(plotdat1_2, aes(x = Sed_conc, y = PredictedProbability)) +
 #by Ref
 adverseDS_plot2 <- ggplot() +
     geom_point(data = adverseDS3, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_adverse)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
          y = "Predicted probability of adverse\neffect due to sediment exposure",
          linetype = "Predicted\nProbability") +
-    scale_x_log10(limits=c(0.01,max(adverseDS3$Sed_level_mg_cm2_d)), 
+    scale_x_log10(limits=c(0.01,max(adverseDS3$Sed_level_stand_mg)), 
                   breaks=c(0.01,0.1,1,10,100,1000,loael),
                   label=c("0.01","0.1","1","10","100","1000",round(loael,digits=1))) +
     geom_ribbon(data = plotdat1_2, aes(x = Sed_conc, y = PredictedProbability, 
@@ -1173,66 +792,66 @@ adverseDS_plot2
 ```{r, echo=FALSE, warning=FALSE}
 #Let's add a log transformation of sediment level, in case it's needed
 anymortDS2 <- any_mort %>% 
-  mutate(log10_conc=log10(Sed_level_mg_cm2_d)) %>% 
+  mutate(log10_conc=log10(Sed_level_stand_mg)) %>% 
   filter(Control_code=="0")
 anymortDS2 %>% tally()
 #anymortDS2 %>% count(Ref)
 #anymortDS2 %>% count(Ref_name)
 
 #Models with fixed effect(s) only
-modDSb1 <- glm(Binary_effect_mortality ~ Sed_level_mg_cm2_d, 
+modDSb1 <- glm(Binary_effect_mortality ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = anymortDS2)
-modDSb2 <- glm(Binary_effect_mortality ~ Sed_level_mg_cm2_d + Sed_days, 
+modDSb2 <- glm(Binary_effect_mortality ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = anymortDS2)
-modDSb3 <- glm(Binary_effect_mortality ~ Sed_level_mg_cm2_d*Sed_days, 
+modDSb3 <- glm(Binary_effect_mortality ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = anymortDS2)
 
 #models with random effect for coral species or study
-modDSb4 <- glmer(Binary_effect_mortality ~ Sed_level_mg_cm2_d + (1 | Gsp), 
+modDSb4 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = anymortDS2)
-modDSb5 <- glmer(Binary_effect_mortality ~ Sed_level_mg_cm2_d + Sed_days + (1 | Gsp), 
+modDSb5 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = anymortDS2)
-modDSb6 <- glmer(Binary_effect_mortality ~ Sed_level_mg_cm2_d*Sed_days + (1 | Gsp), 
+modDSb6 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = anymortDS2)
-modDSb7 <- glmer(Binary_effect_mortality ~ Sed_level_mg_cm2_d + (1 | Ref), 
+modDSb7 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = anymortDS2)
-modDSb8 <- glmer(Binary_effect_mortality ~ Sed_level_mg_cm2_d + Sed_days + (1 | Ref), 
+modDSb8 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
               family = binomial, data = anymortDS2)
-modDSb9 <- glmer(Binary_effect_mortality ~ Sed_level_mg_cm2_d*Sed_days + (1 | Ref), 
+modDSb9 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Ref), 
               family = binomial, data = anymortDS2)
-modDSb10 <- glmer(Binary_effect_mortality ~ Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref), 
+modDSb10 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = anymortDS2)
 modDSb11 <- glmer(Binary_effect_mortality ~ 
-                Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = anymortDS2)
 modDSb12 <- glmer(Binary_effect_mortality ~ 
-                Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = anymortDS2)
-modDSb13 <- glmer(Binary_effect_mortality ~ Sed_level_mg_cm2_d + (1 | Ref_name/Ref), 
+modDSb13 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + (1 | Ref_name/Ref), 
               family = binomial, data = anymortDS2)
 modDSb14 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_cm2_d + Sed_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = anymortDS2)
 modDSb15 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_cm2_d*Sed_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = anymortDS2)
 modDSb16 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = anymortDS2)
 modDSb17 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = anymortDS2)
 modDSb18 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = anymortDS2)
 modDSb19 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = anymortDS2)
 modDSb20 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = anymortDS2)
 modDSb21 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = anymortDS2)
 
 #Model comparison and summary
@@ -1245,7 +864,7 @@ anova(modDSb4,modDSb7,modDSb10,modDSb13,modDSb16,modDSb19) #compare reduced fixe
 #Model is nearly unidentifiable: large eigenvalue ratio - Rescale variables?
 
 #Trying out a log transformation of predictor...
-modDSb11_log <- glmer(Binary_effect_mortality ~ log10_conc + Sed_days + (1 | Gsp) + (1 | Ref), 
+modDSb11_log <- glmer(Binary_effect_mortality ~ log10_conc + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
                       family = binomial, data = anymortDS2)
 print(summary(modDSb11_log), correlation=FALSE)
 #No errors!
@@ -1275,7 +894,6 @@ VarCorr(modDSb11_log) #SD=4.8,5.3
 exp(sqrt(VarCorr(modDSb11_log)$Ref[1])) #I think this means that two observations from different studies typically differ by a factor of exp(sd) = x (?)
 modDSb11_log_noSed <- glmer(Binary_effect_mortality ~ 1 + (1 | Gsp) + (1 | Ref), 
                             family = binomial, data = anymortDS2)
-#Explained_var_Ref <- (1-VarCorr(modDSb11_log)$Ref[1]/VarCorr(modDSb11_log_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(modDSb11_log)$Ref[["(Intercept)"]]
 Ref.intercepts <- fixef(modDSb11_log)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
@@ -1313,7 +931,7 @@ anymortDS3 <- cbind(anymortDS2, pred_modDSb11_log)
 
 anymortDS_plot <- ggplot(data = anymortDS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_mortality,
       color = Ref)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
@@ -1321,13 +939,13 @@ anymortDS_plot <- ggplot(data = anymortDS3) +
          color = "Study") +
     scale_x_log10(limits=c(0.01,1000),breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
-    geom_line(aes(x = Sed_level_mg_cm2_d, y = pred_modDSb11_log), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_modDSb11_log), inherit.aes=FALSE) +
     theme_bw()
 
 anymortDS_plot
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 ```{r}
 jvalues <- with(anymortDS2, seq(from = min(log10_conc), to = max(log10_conc), length.out = 100))
@@ -1379,7 +997,7 @@ ggplot(plotdat2_2, aes(x = Sed_conc, y = PredictedProbability)) +
 #by Ref
 anymortDS_plot2 <- ggplot() +
     geom_point(data = anymortDS2, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_mortality)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
          y = "Predicted probability of any tissue\nmortality due to sediment exposure",
@@ -1406,69 +1024,69 @@ anymortDS_plot2
 #Let's add a log transformation of sediment level, in case it's needed
 adverseSS3 <- adverseSS %>% 
   filter(Control_code=="0") %>% 
-  mutate(log10_conc=log10(Sed_level_mg_L))
+  mutate(log10_conc=log10(Sed_level_stand_mg))
 adverseSS3 %>%  tally()
 adverseSS3 %>%  count(Ref)
 adverseSS3 %>%  count(Ref_name)
 
 #Models with fixed effect(s) only
-modSS1 <- glm(Binary_effect_adverse ~ Sed_level_mg_L, 
+modSS1 <- glm(Binary_effect_adverse ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = adverseSS3)
-modSS2 <- glm(Binary_effect_adverse ~ Sed_level_mg_L + Sed_exposure_days, 
+modSS2 <- glm(Binary_effect_adverse ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = adverseSS3)
-modSS3 <- glm(Binary_effect_adverse ~ Sed_level_mg_L*Sed_exposure_days, 
+modSS3 <- glm(Binary_effect_adverse ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = adverseSS3)
 
 #models with random effect for coral species or study
-modSS4 <- glmer(Binary_effect_adverse ~ Sed_level_mg_L + (1 | Gsp), 
+modSS4 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = adverseSS3)
 modSS5 <- glmer(Binary_effect_adverse ~ 
-                  Sed_level_mg_L + Sed_exposure_days + (1 | Gsp), 
+                  Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = adverseSS3)
 modSS6 <- glmer(Binary_effect_adverse ~ 
-                  Sed_level_mg_L*Sed_exposure_days + (1 | Gsp),
+                  Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp),
                 family = binomial, data = adverseSS3)
-modSS7 <- glmer(Binary_effect_adverse ~ Sed_level_mg_L + (1 | Ref), 
+modSS7 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = adverseSS3)
 modSS8 <- glmer(Binary_effect_adverse ~ 
-                  Sed_level_mg_L + Sed_exposure_days + (1 | Ref), 
+                  Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
                 family = binomial, data = adverseSS3)
 modSS9 <- glmer(Binary_effect_adverse ~ 
-                  Sed_level_mg_L*Sed_exposure_days + (1 | Ref),
+                  Sed_level_stand_mg*Sed_exposure_days + (1 | Ref),
                 family = binomial, data = adverseSS3)
-modSS10 <- glmer(Binary_effect_adverse ~ Sed_level_mg_L + (1 | Gsp) + (1 | Ref), 
+modSS10 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = adverseSS3)
 modSS11 <- glmer(Binary_effect_adverse ~ 
-                Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = adverseSS3)
 modSS12 <- glmer(Binary_effect_adverse ~ 
-                Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = adverseSS3)
-modSS13 <- glmer(Binary_effect_adverse ~ Sed_level_mg_L + (1 | Ref_name/Ref), 
+modSS13 <- glmer(Binary_effect_adverse ~ Sed_level_stand_mg + (1 | Ref_name/Ref), 
               family = binomial, data = adverseSS3)
 modSS14 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = adverseSS3)
 modSS15 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_L*Sed_exposure_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = adverseSS3)
 modSS16 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_L + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = adverseSS3)
 modSS17 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = adverseSS3)
 modSS18 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = adverseSS3)
 modSS19 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_L + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = adverseSS3)
 modSS20 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = adverseSS3)
 modSS21 <- glmer(Binary_effect_adverse ~ 
-                 Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = adverseSS3)
 
 #model comparison and summary
@@ -1513,7 +1131,6 @@ VarCorr(modSS18_log) #SD
 exp(sqrt(VarCorr(modSS18_log)$Ref[1])) #I think this means that two observations from different studies typically differ by a factor of exp(sd) = x (?)
 modSS18_log_noSed <- glmer(Binary_effect_adverse ~ 1 + (1 | Gsp) + (1 | Ref), 
                            family = binomial, data = adverseSS3)
-#Explained_var_Ref <- (1-VarCorr(modSS18_log)$Ref[1]/VarCorr(modSS18_log_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(modSS18_log)$Ref[["(Intercept)"]]
 Ref.intercepts <- fixef(modSS18_log)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
@@ -1550,21 +1167,21 @@ adverseSS3 <- cbind(adverseSS3, pred_modSS18_log)
 
 adverseSS_plot <- ggplot(data = adverseSS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_adverse,
       color = Ref)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Adverse effect due to sediment exposure",
          color = "Study") +
-    scale_x_log10(limits=c(0.1,max(adverseSS3$Sed_level_mg_L)),breaks=c(0.01,0.1,1,10,100,1000),
+    scale_x_log10(limits=c(0.1,max(adverseSS3$Sed_level_stand_mg)),breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
-    geom_line(aes(x = Sed_level_mg_L, y = pred_modSS18_log), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_modSS18_log), inherit.aes=FALSE) +
     theme_bw()
 
 adverseSS_plot
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 ##### By sediment exposure concentration
 ```{r}
@@ -1617,12 +1234,12 @@ ggplot(plotdat3_2, aes(x = Sed_conc, y = PredictedProbability)) +
 #by Ref
 adverseSS_plot2 <- ggplot() +
     geom_point(data = adverseSS3, mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_adverse)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Predicted probability of adverse\neffect due to sediment exposure",
          linetype = "Predicted\nProbability") +
-    scale_x_log10(limits=c(0.1,max(adverseSS3$Sed_level_mg_L)), 
+    scale_x_log10(limits=c(0.1,max(adverseSS3$Sed_level_stand_mg)), 
                   breaks=c(0.01,0.1,1,10,100,1000,loaelSS),
                   label=c("0.01","0.1","1","10","100","1000",round(loaelSS,digits=1))) +
     geom_ribbon(data = plotdat3_2, aes(x = Sed_conc, y = PredictedProbability, 
@@ -1706,69 +1323,69 @@ adverseSS_plot3
 #Let's add a log transformation of sediment level, in case it's needed
 anymortSS2 <- any_mortSS %>% 
   filter(Control_code=="0") %>% 
-  mutate(log10_conc=log10(Sed_level_mg_L))
+  mutate(log10_conc=log10(Sed_level_stand_mg))
 anymortSS2 %>% tally()
 #anymortSS2 %>% count(Ref)
 #anymortSS2 %>% count(Ref_name)
 
 #Models with fixed effect(s) only
-modSS1 <- glm(Binary_effect_mortality ~ Sed_level_mg_L, 
+modSS1 <- glm(Binary_effect_mortality ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = anymortSS2)
-modSS2 <- glm(Binary_effect_mortality ~ Sed_level_mg_L + Sed_exposure_days, 
+modSS2 <- glm(Binary_effect_mortality ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = anymortSS2)
-modSS3 <- glm(Binary_effect_mortality ~ Sed_level_mg_L*Sed_exposure_days, 
+modSS3 <- glm(Binary_effect_mortality ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = anymortSS2)
 
 #models with random effect for coral species or study
-modSS4 <- glmer(Binary_effect_mortality ~ Sed_level_mg_L + (1 | Gsp), 
+modSS4 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = anymortSS2)
 modSS5 <- glmer(Binary_effect_mortality ~ 
-                  Sed_level_mg_L + Sed_exposure_days + (1 | Gsp), 
+                  Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = anymortSS2)
 modSS6 <- glmer(Binary_effect_mortality ~ 
-                  Sed_level_mg_L*Sed_exposure_days + (1 | Gsp),
+                  Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp),
                 family = binomial, data = anymortSS2)
-modSS7 <- glmer(Binary_effect_mortality ~ Sed_level_mg_L + (1 | Ref), 
+modSS7 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = anymortSS2)
 modSS8 <- glmer(Binary_effect_mortality ~ 
-                  Sed_level_mg_L + Sed_exposure_days + (1 | Ref), 
+                  Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
                 family = binomial, data = anymortSS2)
 modSS9 <- glmer(Binary_effect_mortality ~ 
-                  Sed_level_mg_L*Sed_exposure_days + (1 | Ref),
+                  Sed_level_stand_mg*Sed_exposure_days + (1 | Ref),
                 family = binomial, data = anymortSS2)
-modSS10 <- glmer(Binary_effect_mortality ~ Sed_level_mg_L + (1 | Gsp) + (1 | Ref), 
+modSS10 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = anymortSS2)
 modSS11 <- glmer(Binary_effect_mortality ~ 
-                Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = anymortSS2)
 modSS12 <- glmer(Binary_effect_mortality ~ 
-                Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = anymortSS2)
-modSS13 <- glmer(Binary_effect_mortality ~ Sed_level_mg_L + (1 | Ref_name/Ref), 
+modSS13 <- glmer(Binary_effect_mortality ~ Sed_level_stand_mg + (1 | Ref_name/Ref), 
               family = binomial, data = anymortSS2)
 modSS14 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = anymortSS2)
 modSS15 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_L*Sed_exposure_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = anymortSS2)
 modSS16 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_L + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = anymortSS2)
 modSS17 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = anymortSS2)
 modSS18 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = anymortSS2)
 modSS19 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_L + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = anymortSS2)
 modSS20 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_L + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = anymortSS2)
 modSS21 <- glmer(Binary_effect_mortality ~ 
-                 Sed_level_mg_L*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = anymortSS2)
 
 #model comparison and summary
@@ -1807,17 +1424,16 @@ VarCorr(modSSb18_log) #SD=4.8,5.3
 exp(sqrt(VarCorr(modSSb18_log)$Ref[1])) #I think this means that two observations from different studies typically differ by a factor of exp(sd) = x (?)
 modSSb18_log_noSed <- glmer(Binary_effect_mortality ~ 1 + (1 | Gsp), 
                       family = binomial, data = anymortSS2)
-#Explained_var_Ref <- (1-VarCorr(modSSb18_log)$Ref[1]/VarCorr(modSSb18_log_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(modSSb18_log)$Ref[["(Intercept)"]]
 Ref.intercepts <- fixef(modSSb18_log)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
 for (i in 1:length(random.intercepts)) {
-  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modSSb18_log)["Sed_level_mg_L"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSSb18_log)["Sed_level_mg_L"]*x)), 
-                    from = min(anymortSS2$Sed_level_mg_L), to = max(anymortSS2$Sed_level_mg_L), 
+  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modSSb18_log)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSSb18_log)["Sed_level_stand_mg"]*x)), 
+                    from = min(anymortSS2$Sed_level_stand_mg), to = max(anymortSS2$Sed_level_stand_mg), 
                     ylim = c(0, 1), 
                     ylab = "Probability of adverse effect", 
                     xlab = "log10(exposure concentration, mg/cm2/d)")
-  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modSSb18_log)["Sed_level_mg_L"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSSb18_log)["Sed_level_mg_L"]*x)), add = T) 
+  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modSSb18_log)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modSSb18_log)["Sed_level_stand_mg"]*x)), add = T) 
 }
 
 #https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
@@ -1844,15 +1460,15 @@ anymortSS3 <- cbind(anymortSS2, pred_modSSb18_log)
 
 anymortSS_plot <- ggplot(data = anymortSS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_mortality,
       color = Ref)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Bleaching due to sediment exposure",
          color = "Study") +
-    scale_x_log10(limits=c(0.1,max(anymortSS3$Sed_level_mg_L)),breaks=c(0.01,0.1,1,10,100,1000),
+    scale_x_log10(limits=c(0.1,max(anymortSS3$Sed_level_stand_mg)),breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
-    geom_line(aes(x = Sed_level_mg_L, y = pred_modSSb18_log), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_modSSb18_log), inherit.aes=FALSE) +
     theme_bw()
 
 anymortSS_plot
@@ -1911,12 +1527,12 @@ ggplot(plotdat4_2, aes(x = mg_L, y = PredictedProbability)) +
 #by Ref
 anymortSS_plot2 <- ggplot() +
     geom_point(data = anymortSS2, mapping = aes(
-      x = Sed_level_mg_L, 
+      x = Sed_level_stand_mg, 
       y = Binary_effect_mortality)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Predicted probability of any tissue\nmortality to sediment exposure",
          linetype = "Predicted\nProbability") +
-    scale_x_log10(limits=c(0.1,max(anymortSS2$Sed_level_mg_L)), 
+    scale_x_log10(limits=c(0.1,max(anymortSS2$Sed_level_stand_mg)), 
                   breaks=c(0.01,0.1,1,10,100,1000,loaelSS2),
                   label=c("0.01","0.1","1","10","100","1000",round(loaelSS2,digits=1))) +
     geom_ribbon(data = plotdat4_2, aes(x = mg_L, y = PredictedProbability, 
