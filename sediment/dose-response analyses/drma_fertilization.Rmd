@@ -1,7 +1,7 @@
 ---
 title: "Effects of sediment on the fertilization of coral gametes"
 author: "Lillian J. Tuttle"
-date: "8/4/2020"
+date: "9/25/2020"
 output: html_document
 ---
 
@@ -14,9 +14,7 @@ library(splines)
 library(effects)
 library(lattice)
 library(MuMIn)
-
-#will want to getwd() and setwd(), as appropriate
-effectsize <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/effectsize2.csv", header=T)
+effectsize <- read.csv("data/effectsize_ALL.csv", header=T)
 
 #keyboard shortcuts to remember: 
 #command-option-I inserts new code chunk
@@ -50,10 +48,10 @@ effectsize2 <- effectsize %>% filter(Control=="0")
 #effectsize2 #"double"-check!
 ES_adult <- effectsize2 %>% filter(Coral_age_class=="adult")
 ES_immat <- effectsize2 %>% filter(!Coral_age_class=="adult")
-ES_adult %>% count(Gsp) #n=4 species
-ES_adult %>% count(Updated_Genus)
-ES_immat %>% count(Gsp) #n=4 species
-ES_immat %>% count(Updated_Genus)
+#ES_adult %>% count(Gsp)
+#ES_adult %>% count(Updated_Genus)
+#ES_immat %>% count(Gsp)
+#ES_immat %>% count(Updated_Genus)
 
 #Separate into deposited sediment (DS) and suspended sediment (SS) datasets, WITHOUT CONTROLS
 ES_DS2 <- effectsize2 %>% filter(DS_SS=="DS")
@@ -110,40 +108,6 @@ ES_SS_fertilization_b2 <- subset(ES_SS_fertilization_b, Control=="0")
 I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to cumulative exposure. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
 
 ```{r, echo=FALSE, warning=FALSE}
-#CUMULATIVE EXPOSURE vs. effect size, by study
-#Using previously calculated Hedges' d and variance of d
-ggplot(ES_SS_fertilization2, 
-       aes(x = Sed_exposure_mg_d_L,
-           y = Hedges_d,
-           color = Ref,
-           ymin = Hedges_d-Var_d,
-           ymax = Hedges_d+Var_d)) + 
-  geom_pointrange() +
-  ggtitle("Fertilization success rate") +
-  labs(x = "Sediment cumulative exposure (mg x day/L)",
-       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  theme_classic() +
-  scale_x_log10(limits = c(0.1,150), breaks=c(0.1,1,10,100), 
-                label=c("0.1","1","10","100"))
-#Using dosresmeta's calculation of Hedges' d and variance of d
-ggplot(ES_SS_fertilization2, 
-       aes(x = Sed_exposure_mg_d_L,
-           y = smd,
-           color = Ref,
-           ymin = smd-vmd,
-           ymax = smd+vmd)) + 
-  geom_pointrange() +
-  ggtitle("Fertilization success rate") +
-  labs(x = "Sediment cumulative exposure (mg x day/L)",
-       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  theme_classic() +
-  scale_x_log10(limits = c(0.1,150), breaks=c(0.1,1,10,100), 
-                label=c("0.1","1","10","100"))
-
 #EXPOSURE CONCENTRATION vs. effect size, by study
 #Using previously calculated Hedges' d and variance of d
 ggplot(ES_SS_fertilization2, 
@@ -191,7 +155,7 @@ ggplot(ES_SS_fertilization2,
   geom_pointrange() +
   ggtitle("Fertilization success rate") +
   labs(x = "Sediment exposure concentration (mg/L)",
-       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
        color = "Sediment relative\ngrain size",
        shape = "Sediment source") +
   geom_abline(intercept=0, slope=0) +
@@ -208,7 +172,7 @@ ggplot(ES_SS_fertilization2,
   geom_pointrange() +
   ggtitle("Fertilization success rate") +
   labs(x = "Sediment exposure concentration (mg/L)",
-       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
        color = "Sediment\ngrain class",
        shape = "Sediment mineralogy") +
   geom_abline(intercept=0, slope=0) +
@@ -227,7 +191,7 @@ ggplot(ES_SS_fertilization2,
   geom_pointrange() +
   ggtitle("Fertilization success rate") +
   labs(x = "Sediment exposure concentration (mg/L)",
-       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
        color = "Species") +
   geom_abline(intercept=0, slope=0) +
   theme_classic() +
@@ -246,7 +210,7 @@ ggplot(ES_SS_fertilization2,
   geom_pointrange() +
   ggtitle("Fertilization success rate") +
   labs(x = "Sediment exposure concentration (mg/L)",
-       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
+       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
        color = "Region",
        shape = "Ocean") +
   geom_abline(intercept=0, slope=0) +
@@ -264,18 +228,11 @@ The following set of functions model fixed and random (nested) effects WITHOUT a
 #?mixmeta
 
 # Organizational Note: 
-#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
-#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
-#All models with 'a' or 'c' at the end of its name have fixed slopes, random intercepts.
-#All models with 'b' or 'd' at the end of its name have random slopes and intercepts.
+#All models have exposure concentration as its predictor. 
+#All models with 'c' at the end of its name have fixed slopes, random intercepts.
+#All models with 'd' at the end of its name have random slopes and intercepts.
 
 # LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_SS_fertil_1a <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ 1 | Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
-mod_SS_fertil_1b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                      random =  ~ Sed_exposure_mg_d_L | Comparison,
-                      data = ES_SS_fertilization2, method = "ml")
 mod_SS_fertil_1c <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                        random =  ~ 1 | Comparison,
                        data = ES_SS_fertilization2, method = "ml")
@@ -284,12 +241,6 @@ mod_SS_fertil_1d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                       data = ES_SS_fertilization2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_SS_fertil_2a <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ 1 | Ref/Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
-mod_SS_fertil_2b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                      random =  ~ Sed_exposure_mg_d_L | Ref/Comparison,
-                      data = ES_SS_fertilization2, method = "ml")
 mod_SS_fertil_2c <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                        random =  ~ 1 | Ref/Comparison,
                        data = ES_SS_fertilization2, method = "ml")
@@ -298,12 +249,6 @@ mod_SS_fertil_2d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                       data = ES_SS_fertilization2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_SS_fertil_3a <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ 1 | Ref_name/Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
-mod_SS_fertil_3b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                      random =  ~ Sed_exposure_mg_d_L | Ref_name/Comparison,
-                      data = ES_SS_fertilization2, method = "ml")
 mod_SS_fertil_3c <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                        random =  ~ 1 | Ref_name/Comparison,
                        data = ES_SS_fertilization2, method = "ml")
@@ -312,12 +257,6 @@ mod_SS_fertil_3d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                       data = ES_SS_fertilization2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_SS_fertil_4a <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ 1 | Ref_name/Ref/Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
-mod_SS_fertil_4b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ Sed_exposure_mg_d_L | Ref_name/Ref/Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
 mod_SS_fertil_4c <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                        random =  ~ 1 | Ref_name/Ref/Comparison,
                        data = ES_SS_fertilization2, method = "ml")
@@ -340,22 +279,15 @@ newlist_FERT <- list(NA)
 for (i in seq(1,length(covar_SS_fertilization))) {
 newlist_FERT[i] <- list(covar_SS_fertilization[[i]]$S)
 }
-mod_SS_fertil_5a <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ 1 | Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT))
-mod_SS_fertil_5b <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ Sed_exposure_mg_d_L | Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT))
 mod_SS_fertil_5c <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ 1 | Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT))
 mod_SS_fertil_5d <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ Sed_level_standardized | Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT))
+
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
 #Code for covariance matrix to include for addSlist for Ref/Comparison
@@ -375,22 +307,15 @@ for (i in seq(1,length(unique(reflista$Ref))))  {
   newlist_FERT2[i] <- list(bdiagMat(templist_FERT2))
   templist_FERT2 <- list(NA)
 }
-mod_SS_fertil_6a <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ 1 | Ref/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT2))
-mod_SS_fertil_6b <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ Sed_exposure_mg_d_L | Ref/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT2))
 mod_SS_fertil_6c <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ 1 | Ref/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT2))
 mod_SS_fertil_6d <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ Sed_level_standardized | Ref/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT2))
+
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
 #Code for covariance matrix to include for addSlist for Ref_name/Comparison
@@ -410,21 +335,13 @@ for (i in seq(1,length(unique(reflista$Ref_name))))  {
   newlist_FERT3[i] <- list(bdiagMat(templist_FERT4))
   templist_FERT4 <- list(NA)
 }
-mod_SS_fertil_7a <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ Sed_exposure_mg_d_L | Ref_name/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT3))
-mod_SS_fertil_7b <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ 1 | Ref_name/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT3))
 mod_SS_fertil_7c <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ 1 | Ref_name/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT3))
 mod_SS_fertil_7d <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ Sed_level_standardized | Ref_name/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT3))
 ```
   
@@ -432,9 +349,6 @@ And now to compare relative fit of linear models...
 
 ```{r, echo=FALSE, warning=FALSE}
 # Model Comparisons
-AIC(mod_SS_fertil_1a, mod_SS_fertil_2a, mod_SS_fertil_3a, mod_SS_fertil_4a, mod_SS_fertil_5a, mod_SS_fertil_6a, mod_SS_fertil_7a, mod_SS_fertil_1b, mod_SS_fertil_2b, mod_SS_fertil_3b, mod_SS_fertil_4b, mod_SS_fertil_5b, mod_SS_fertil_6b, mod_SS_fertil_7b) 
-#of these, model 2b has lowest AIC (but 6b within 2 AIC)
-
 AIC(mod_SS_fertil_1c, mod_SS_fertil_2c, mod_SS_fertil_3c, mod_SS_fertil_4c, mod_SS_fertil_5c, mod_SS_fertil_6c, mod_SS_fertil_7c, mod_SS_fertil_1d, mod_SS_fertil_2d, mod_SS_fertil_3d, mod_SS_fertil_4d, mod_SS_fertil_5d, mod_SS_fertil_6d, mod_SS_fertil_7d) 
 #of these, model 6d has lowest AIC
 ```
@@ -442,22 +356,8 @@ AIC(mod_SS_fertil_1c, mod_SS_fertil_2c, mod_SS_fertil_3c, mod_SS_fertil_4c, mod_
 And now to evaluate residuals of models...
 
 ```{r, echo=FALSE, warning=FALSE}
-# Residuals vs. Fitted Plots
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-
-resid_b <- resid(mod_SS_fertil_2b)
-fitted_b <- fitted(mod_SS_fertil_2b)
-plot(fitted_b, resid_b, main = "smd ~ mg_d_L, S = vmd,
-     random =  ~ mg_d_L | Ref/Comparison")
-abline(0,0)
-#mod_SS_fertil_1a and mod_SS_fertil_3a were within 2 AIC
-
-resid_b2 <- resid(mod_SS_fertil_6b)
-fitted_b2 <- fitted(mod_SS_fertil_6b)
-plot(fitted_b2, resid_b2, main = "B: smd ~ mg_d_L, control = addSlist,
-     random =  ~ mg_d_L | Ref/Comparison")
-abline(0,0)
-#mod_SS_fertil_6b within 1 AIC
+# Residuals vs. Fitted Plots and Normal Q-Q Plot
+op <- par(mfrow = c(1,2), mar = c(2,2,4,1))
 
 resid_d <- resid(mod_SS_fertil_6d)
 fitted_d <- fitted(mod_SS_fertil_6d)
@@ -465,25 +365,15 @@ plot(fitted_d, resid_d, main = "D: smd ~ mg_L, control = addSlist,
      random =  ~ mg_L | Ref/Comparison")
 abline(0,0)
 
-par(op)
-
-
-# Normal Q-Q Plot
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-qqnorm(resid_b)
-qqline(resid_b)
-qqnorm(resid_b2)
-qqline(resid_b2)
 qqnorm(resid_d)
 qqline(resid_d)
+
 par(op)
 
-
 # Patterns:
-# 1.  Residuals for all best-fit models are very similar.
-# 2.  There could be non-linearities that need to be accounted for.
-# 3.  Very strong outlier in negative residual land!
-# 4.  First let's try a log transformation of sediment exposure before adding non-linear models.
+# 1.  There could be non-linearities that need to be accounted for.
+# 2.  Very strong outlier in negative residual land!
+# 3.  First let's try a log transformation of sediment exposure before adding non-linear models.
 ```
   
 Now let's check out a log, base 10 transformation of sediment exposure to see if it improves the residuals of the models.
@@ -492,18 +382,11 @@ Now let's check out a log, base 10 transformation of sediment exposure to see if
 #?mixmeta
 
 # Organizational Note: 
-#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
-#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
-#All models with 'a' or 'c' at the end of its name have fixed slopes, random intercepts.
-#All models with 'b' or 'd' at the end of its name have random slopes and intercepts.
+#All models have exposure concentration as its predictor. 
+#All models with 'c' at the end of its name have fixed slopes, random intercepts.
+#All models with 'd' at the end of its name have random slopes and intercepts.
 
 # LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_1a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ 1 | Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
-log_mod_SS_fertil_1b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                      random =  ~ log10(Sed_exposure_mg_d_L) | Comparison,
-                      data = ES_SS_fertilization2, method = "ml")
 log_mod_SS_fertil_1c <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                        random =  ~ 1 | Comparison,
                        data = ES_SS_fertilization2, method = "ml")
@@ -512,12 +395,6 @@ log_mod_SS_fertil_1d <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                       data = ES_SS_fertilization2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_2a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ 1 | Ref/Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
-log_mod_SS_fertil_2b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                      random =  ~ log10(Sed_exposure_mg_d_L) | Ref/Comparison,
-                      data = ES_SS_fertilization2, method = "ml")
 log_mod_SS_fertil_2c <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                        random =  ~ 1 | Ref/Comparison,
                        data = ES_SS_fertilization2, method = "ml")
@@ -526,12 +403,6 @@ log_mod_SS_fertil_2d <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                       data = ES_SS_fertilization2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_3a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ 1 | Ref_name/Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
-log_mod_SS_fertil_3b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                      random =  ~ log10(Sed_exposure_mg_d_L) | Ref_name/Comparison,
-                      data = ES_SS_fertilization2, method = "ml")
 log_mod_SS_fertil_3c <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                        random =  ~ 1 | Ref_name/Comparison,
                        data = ES_SS_fertilization2, method = "ml")
@@ -540,12 +411,6 @@ log_mod_SS_fertil_3d <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                       data = ES_SS_fertilization2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_4a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ 1 | Ref_name/Ref/Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
-log_mod_SS_fertil_4b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ log10(Sed_exposure_mg_d_L) | Ref_name/Ref/Comparison,
-                       data = ES_SS_fertilization2, method = "ml")
 log_mod_SS_fertil_4c <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                        random =  ~ 1 | Ref_name/Ref/Comparison,
                        data = ES_SS_fertilization2, method = "ml")
@@ -562,28 +427,22 @@ To account for within-comparison correlations in the mixmeta model, I replace th
 #covar_SS_fertilization <- by(ES_SS_fertilization, ES_SS_fertilization$Comparison, function(x) 
 #  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
 
+
 # LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON CORRELATIONS
 #Code for covariance matrix to include for addSlist for Comparison random effect
 newlist_FERT_log <- list(NA)
 for (i in seq(1,length(covar_SS_fertilization))) {
 newlist_FERT_log[i] <- list(covar_SS_fertilization[[i]]$S)
 }
-log_mod_SS_fertil_5a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ 1 | Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log))
-log_mod_SS_fertil_5b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ log10(Sed_exposure_mg_d_L) | Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log))
 log_mod_SS_fertil_5c <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ 1 | Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log))
 log_mod_SS_fertil_5d <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ log10(Sed_level_standardized) | Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log))
+
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
 #Code for covariance matrix to include for addSlist for Ref/Comparison
@@ -603,22 +462,15 @@ for (i in seq(1,length(unique(reflista$Ref))))  {
   newlist_FERT_log2[i] <- list(bdiagMat(templist_FERT_log2))
   templist_FERT_log2 <- list(NA)
 }
-log_mod_SS_fertil_6a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ 1 | Ref/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log2))
-log_mod_SS_fertil_6b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ log10(Sed_exposure_mg_d_L) | Ref/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log2))
 log_mod_SS_fertil_6c <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ 1 | Ref/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log2))
 log_mod_SS_fertil_6d <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ log10(Sed_level_standardized) | Ref/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log2))
+
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
 #Code for covariance matrix to include for addSlist for Ref_name/Comparison
@@ -638,21 +490,13 @@ for (i in seq(1,length(unique(reflista$Ref_name))))  {
   newlist_FERT_log3[i] <- list(bdiagMat(templist_FERT_log4))
   templist_FERT_log4 <- list(NA)
 }
-log_mod_SS_fertil_7a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ 1 | Ref_name/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log3))
-log_mod_SS_fertil_7b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ log10(Sed_exposure_mg_d_L) | Ref_name/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log3))
 log_mod_SS_fertil_7c <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ 1 | Ref_name/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log3))
 log_mod_SS_fertil_7d <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ log10(Sed_level_standardized) | Ref_name/Comparison,
-                       data=ES_SS_fertilization2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log3))
 ```
     
@@ -660,29 +504,14 @@ log_mod_SS_fertil_7d <- mixmeta(smd ~ log10(Sed_level_standardized),
 And now to compare relative fit of logarithmic models...
 ```{r, echo=FALSE, warning=FALSE}
 # Model Comparisons
-AIC(log_mod_SS_fertil_1a, log_mod_SS_fertil_2a, log_mod_SS_fertil_3a, log_mod_SS_fertil_4a, log_mod_SS_fertil_5a, log_mod_SS_fertil_6a, log_mod_SS_fertil_7a, log_mod_SS_fertil_1b, log_mod_SS_fertil_2b, log_mod_SS_fertil_3b, log_mod_SS_fertil_4b, log_mod_SS_fertil_5b, log_mod_SS_fertil_6b, log_mod_SS_fertil_7b) 
-#of these, model 2b has lowest AIC (but 6b,3b,7b within 2 AIC)
-
 AIC(log_mod_SS_fertil_1c, log_mod_SS_fertil_2c, log_mod_SS_fertil_3c, log_mod_SS_fertil_4c, log_mod_SS_fertil_5c, log_mod_SS_fertil_6c, log_mod_SS_fertil_7c, log_mod_SS_fertil_1d, log_mod_SS_fertil_2d, log_mod_SS_fertil_3d, log_mod_SS_fertil_4d, log_mod_SS_fertil_5d, log_mod_SS_fertil_6d, log_mod_SS_fertil_7d) 
 #of these, model 3d has lowest AIC (but 2d,7d within 2 AIC)
 ```
   
 And now to evaluate residuals of models...
 ```{r, echo=FALSE, warning=FALSE}
-# Residuals vs. Fitted Plots
+# Residuals vs. Fitted Plots and Normal Q-Q Plots
 op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-
-resid_logb <- resid(log_mod_SS_fertil_2b)
-fitted_logb <- fitted(log_mod_SS_fertil_2b)
-plot(fitted_logb, resid_logb, main = "smd ~ log_mg_d_L, S = vmd,
-     random =  ~ log_mg_d_L | Ref/Comparison")
-abline(0,0)
-
-resid_logb2 <- resid(log_mod_SS_fertil_6b)
-fitted_logb2 <- fitted(log_mod_SS_fertil_6b)
-plot(fitted_logb2, resid_logb2, main = "smd ~ log_mg_d_L, control=addSlist,
-     random =  ~ log_mg_d_L | Ref/Comparison")
-abline(0,0)
 
 resid_logd <- resid(log_mod_SS_fertil_3d)
 fitted_logd <- fitted(log_mod_SS_fertil_3d)
@@ -696,21 +525,12 @@ plot(fitted_logd2, resid_logd2, main = "smd ~ log_mg_L, S = vmd,
      random =  ~ log_mg_L | Ref/Comparison")
 abline(0,0)
 
-par(op)
-
-
-# Normal Q-Q Plot
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-qqnorm(resid_logb)
-qqline(resid_logb)
-qqnorm(resid_logb2)
-qqline(resid_logb2)
 qqnorm(resid_logd)
 qqline(resid_logd)
 qqnorm(resid_logd2)
 qqline(resid_logd2)
-par(op)
 
+par(op)
 
 # Patterns:
 # 1.  Residuals for all models are very similar.
@@ -722,23 +542,13 @@ These are much improved from the non-logged models! There is still one outlier, 
   
 ```{r, echo=FALSE, warning=FALSE}
 # Calculate 1st and 3rd quartiles of exposure, to assign 'knots' for non-linear models
-log_mg_d_L <- log10(ES_SS_fertilization2$Sed_exposure_mg_d_L)
-summary(log_mg_d_L)
-#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#-0.4559  0.5367  0.9785  0.9656  1.5051  2.1072 
 log_mg_L <- log10(ES_SS_fertilization2$Sed_level_standardized)
 summary(log_mg_L)
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 # 0.6021  1.5051  1.9657  1.8956  2.3617  3.0103 
 
+
 # NON-LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_NL2b <- mixmeta(smd ~ ns(log_mg_d_L, knots = c(0.5367,1.5051)), 
-                         random = ~ ns(log_mg_d_L, knots = c(0.5367,1.5051)) | Ref/Comparison, 
-                         data = ES_SS_fertilization2, method = "ml", S = vmd)
-log_mod_SS_fertil_NL6b <- mixmeta(smd ~ ns(log_mg_d_L, knots = c(0.5367,1.5051)), 
-                         random = ~ ns(log_mg_d_L, knots = c(0.5367,1.5051)) | Ref/Comparison, 
-                         data = ES_SS_fertilization2, method = "ml",
-                         control=list(addSlist=newlist_FERT_log2))
 log_mod_SS_fertil_NL3d <- mixmeta(smd ~ ns(log_mg_L, knots = c(1.5051,2.3617)), 
                          random = ~ ns(log_mg_L, knots = c(1.5051,2.3617)) | Ref_name/Comparison, 
                          data = ES_SS_fertilization2, method = "ml", S = vmd)
@@ -746,32 +556,18 @@ log_mod_SS_fertil_NL2d <- mixmeta(smd ~ ns(log_mg_L, knots = c(1.5051,2.3617)),
                          random = ~ ns(log_mg_L, knots = c(1.5051,2.3617)) | Ref/Comparison, 
                          data = ES_SS_fertilization2, method = "ml", S = vmd)
 
+
 # SIMPLIFY THE MODEL BY ALLOWING NON-LINEARITY ONLY IN FIXED EFFECTS
-log_mod_SS_fertil_NL2a_2 <- update(log_mod_SS_fertil_NL2b, random = ~ log_mg_d_L | Ref/Comparison)
-log_mod_SS_fertil_NL6b_2 <- update(log_mod_SS_fertil_NL6b, random = ~ log_mg_d_L | Ref/Comparison)
-log_mod_SS_fertil_NL3c_2 <- update(log_mod_SS_fertil_NL3d, random = ~ log_mg_L | Ref_name/Comparison)
+log_mod_SS_fertil_NL3d_2 <- update(log_mod_SS_fertil_NL3d, random = ~ log_mg_L | Ref_name/Comparison)
 log_mod_SS_fertil_NL2d_2 <- update(log_mod_SS_fertil_NL2d, random = ~ log_mg_L | Ref/Comparison)
 
-AIC(log_mod_SS_fertil_NL2b, log_mod_SS_fertil_NL2b_2, log_mod_SS_fertil_NL6b, log_mod_SS_fertil_NL6b_2) #NL6b
 AIC(log_mod_SS_fertil_NL3d, log_mod_SS_fertil_NL3d_2, log_mod_SS_fertil_NL2d, log_mod_SS_fertil_NL2d_2) #NL3d_2 or 2d_2
 ```
   
 And now to evaluate residuals of non-linear models...
 ```{r, echo=FALSE, warning=FALSE}
-# Residuals vs. Fitted Plots
+# Residuals vs. Fitted Plots and Normal Q-Q Plots
 op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-
-new_resid_b <- resid(log_mod_SS_fertil_NL2b_2)
-new_fitted_b <- fitted(log_mod_SS_fertil_NL2b_2)
-plot(new_fitted_b, new_resid_b, main = "smd ~ ns(log_mg_d_L), S = vmd,
-     random =  ~ log_mg_d_L | Ref/Comparison")
-abline(0,0)
-
-new_resid_b2 <- resid(log_mod_SS_fertil_NL6b)
-new_fitted_b2 <- fitted(log_mod_SS_fertil_NL6b)
-plot(new_fitted_b2, new_resid_b2, main = "smd ~ ns(log_mg_d_L), control=addSlist,
-     random =  ~ ns(log_mg_d_L) | Ref/Comparison")
-abline(0,0)
 
 new_resid_d <- resid(log_mod_SS_fertil_NL3d_2)
 new_fitted_d <- fitted(log_mod_SS_fertil_NL3d_2)
@@ -785,19 +581,11 @@ plot(new_fitted_d2, new_resid_d2, main = "smd ~ ns(log_mg_L), S = vmd,
      random =  ~ log_mg_L | Ref/Comparison")
 abline(0,0)
 
-par(op)
-
-
-# Normal Q-Q Plot
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-qqnorm(new_resid_b)
-qqline(new_resid_b)
-qqnorm(new_resid_b2)
-qqline(new_resid_b2)
 qqnorm(new_resid_d)
 qqline(new_resid_d)
 qqnorm(new_resid_d2)
 qqline(new_resid_d2)
+
 par(op)
 
 
@@ -810,45 +598,6 @@ The residuals for the non-linear, logarithmic models are very similar to the ana
   
   
 ### 4. Best-Fit Model Summary
-  
-#### i. Cumulative exposure is PREDICTOR
-Now I will predict the effect size along the exposure range and plot with confidence intervals.  
-
-```{r, echo=FALSE, warning=FALSE}
-summary(log_mod_SS_fertil_2b)
-
-# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
-pred_log_mod_SS_fertil_2b <- predict(log_mod_SS_fertil_2b, newdata=ES_SS_fertilization2, ci=TRUE)
-ES_SS_fertilization2_CI2 <- cbind(ES_SS_fertilization2, pred_log_mod_SS_fertil_2b)
-#head(ES_SS_fertilization2_CI2)
-min_exp_b <- ES_SS_fertilization2_CI2 %>% 
-  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
-  filter(overlap0==FALSE) %>% 
-  filter(ci.ub<0) %>% 
-  summarize(min_exp_b=min(Sed_exposure_mg_d_L))
-min_exp_b2 <- as.numeric(min_exp_b)
-
-ggplot(ES_SS_fertilization2_CI2, 
-       aes(x = Sed_exposure_mg_d_L,
-           y = smd,
-           color = Ref,
-           ymin = smd-vmd,
-           ymax = smd+vmd)) + 
-  geom_pointrange() +
-  labs(x = "Sediment cumulative exposure (mg x day/L)",
-       y = expression("Effect size (Hedges'"~italic(d)~"+/- s.d.)"),
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  geom_vline(xintercept=min_exp_b2, linetype="dashed", color = "red") +
-  geom_line(aes(x = Sed_exposure_mg_d_L, y = fit), inherit.aes=FALSE) +
-  geom_ribbon(aes(x = Sed_exposure_mg_d_L, y = smd,
-                  ymin = ci.lb, ymax = ci.ub), 
-              fill = "grey70", alpha = .15, 
-              show.legend=FALSE, inherit.aes=FALSE) +
-  theme_classic() +
-  scale_x_log10(limits = c(0.1,150), breaks=c(0.1,1,10,100,min_exp_b2), 
-                label=c("0.1","1","10","100",round(min_exp_b2, digits = 1)))
-```
   
 #### ii. Exposure concentration is PREDICTOR
 Now I will predict the effect size along the exposure range and plot with confidence intervals.  
@@ -900,47 +649,13 @@ ggplot(ES_SS_fertilization2_CI4,
                 label=c("1","10","100","1000",round(min_conc_d2,digits=1)))
 ```
    
-  
+   
 ## B. Suspended Sediment, WITHOUT outlier  
   
 ### 1. Plots  
 I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to cumulative exposure. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
 
 ```{r, echo=FALSE, warning=FALSE}
-#CUMULATIVE EXPOSURE vs. effect size, by study
-#Using previously calculated Hedges' d and variance of d
-ggplot(ES_SS_fertilization_b2, 
-       aes(x = Sed_exposure_mg_d_L,
-           y = Hedges_d,
-           color = Ref,
-           ymin = Hedges_d-Var_d,
-           ymax = Hedges_d+Var_d)) + 
-  geom_pointrange() +
-  ggtitle("Fertilization success rate") +
-  labs(x = "Sediment cumulative exposure (mg x day/L)",
-       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  theme_classic() +
-  scale_x_log10(limits = c(0.1,150), breaks=c(0.1,1,10,100), 
-                label=c("0.1","1","10","100"))
-#Using dosresmeta's calculation of Hedges' d and variance of d
-ggplot(ES_SS_fertilization_b2, 
-       aes(x = Sed_exposure_mg_d_L,
-           y = smd,
-           color = Ref,
-           ymin = smd-vmd,
-           ymax = smd+vmd)) + 
-  geom_pointrange() +
-  ggtitle("Fertilization success rate") +
-  labs(x = "Sediment cumulative exposure (mg x day/L)",
-       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  theme_classic() +
-  scale_x_log10(limits = c(0.1,150), breaks=c(0.1,1,10,100), 
-                label=c("0.1","1","10","100"))
-
 #EXPOSURE CONCENTRATION vs. effect size, by study
 #Using previously calculated Hedges' d and variance of d
 ggplot(ES_SS_fertilization_b2, 
@@ -1061,18 +776,11 @@ The following set of functions model fixed and random (nested) effects WITHOUT a
 #?mixmeta
 
 # Organizational Note: 
-#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
-#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
-#All models with 'a' or 'c' at the end of its name have fixed slopes, random intercepts.
-#All models with 'b' or 'd' at the end of its name have random slopes and intercepts.
+#All models have exposure concentration as its predictor. 
+#All models with 'c' at the end of its name have fixed slopes, random intercepts.
+#All models with 'd' at the end of its name have random slopes and intercepts.
 
 # LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_SS_fertil_b_1a <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ 1 | Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
-mod_SS_fertil_b_1b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                      random =  ~ Sed_exposure_mg_d_L | Comparison,
-                      data = ES_SS_fertilization_b2, method = "ml")
 mod_SS_fertil_b_1c <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                        random =  ~ 1 | Comparison,
                        data = ES_SS_fertilization_b2, method = "ml")
@@ -1081,12 +789,6 @@ mod_SS_fertil_b_1d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                       data = ES_SS_fertilization_b2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_SS_fertil_b_2a <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ 1 | Ref/Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
-mod_SS_fertil_b_2b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                      random =  ~ Sed_exposure_mg_d_L | Ref/Comparison,
-                      data = ES_SS_fertilization_b2, method = "ml")
 mod_SS_fertil_b_2c <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                        random =  ~ 1 | Ref/Comparison,
                        data = ES_SS_fertilization_b2, method = "ml")
@@ -1095,12 +797,6 @@ mod_SS_fertil_b_2d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                       data = ES_SS_fertilization_b2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_SS_fertil_b_3a <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ 1 | Ref_name/Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
-mod_SS_fertil_b_3b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                      random =  ~ Sed_exposure_mg_d_L | Ref_name/Comparison,
-                      data = ES_SS_fertilization_b2, method = "ml")
 mod_SS_fertil_b_3c <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                        random =  ~ 1 | Ref_name/Comparison,
                        data = ES_SS_fertilization_b2, method = "ml")
@@ -1109,12 +805,6 @@ mod_SS_fertil_b_3d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                       data = ES_SS_fertilization_b2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_SS_fertil_b_4a <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ 1 | Ref_name/Ref/Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
-mod_SS_fertil_b_4b <- mixmeta(smd ~ Sed_exposure_mg_d_L, S = vmd,
-                       random =  ~ Sed_exposure_mg_d_L | Ref_name/Ref/Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
 mod_SS_fertil_b_4c <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                        random =  ~ 1 | Ref_name/Ref/Comparison,
                        data = ES_SS_fertilization_b2, method = "ml")
@@ -1131,28 +821,22 @@ To account for within-comparison correlations in the mixmeta model, I replace th
 #covar_SS_fertilization_b <- by(ES_SS_fertilization_b, ES_SS_fertilization_b$Comparison, function(x) 
 #  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
 
+
 # LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON CORRELATIONS
 #Code for covariance matrix to include for addSlist for Comparison random effect
 newlist_FERT_b <- list(NA)
 for (i in seq(1,length(covar_SS_fertilization_b))) {
 newlist_FERT_b[i] <- list(covar_SS_fertilization_b[[i]]$S)
 }
-mod_SS_fertil_b_5a <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ 1 | Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_b))
-mod_SS_fertil_b_5b <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ Sed_exposure_mg_d_L | Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_b))
 mod_SS_fertil_b_5c <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ 1 | Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_b))
 mod_SS_fertil_b_5d <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ Sed_level_standardized | Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_b))
+
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
 #Code for covariance matrix to include for addSlist for Ref/Comparison
@@ -1172,22 +856,15 @@ for (i in seq(1,length(unique(reflista$Ref))))  {
   newlist_FERT_b2[i] <- list(bdiagMat(templist_FERT_b2))
   templist_FERT_b2 <- list(NA)
 }
-mod_SS_fertil_b_6a <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ 1 | Ref/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_b2))
-mod_SS_fertil_b_6b <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ Sed_exposure_mg_d_L | Ref/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_b2))
 mod_SS_fertil_b_6c <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ 1 | Ref/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_b2))
 mod_SS_fertil_b_6d <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ Sed_level_standardized | Ref/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_b2))
+
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
 #Code for covariance matrix to include for addSlist for Ref_name/Comparison
@@ -1207,21 +884,13 @@ for (i in seq(1,length(unique(reflista$Ref_name))))  {
   newlist_FERT_b3[i] <- list(bdiagMat(templist_FERT_b4))
   templist_FERT_b4 <- list(NA)
 }
-mod_SS_fertil_b_7a <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ 1 | Ref_name/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_b3))
-mod_SS_fertil_b_7b <- mixmeta(smd ~ Sed_exposure_mg_d_L,
-                       random = ~ Sed_exposure_mg_d_L | Ref_name/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_b3))
 mod_SS_fertil_b_7c <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ 1 | Ref_name/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_b3))
 mod_SS_fertil_b_7d <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ Sed_level_standardized | Ref_name/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_b3))
 ```
   
@@ -1229,9 +898,6 @@ And now to compare relative fit of linear models...
 
 ```{r, echo=FALSE, warning=FALSE}
 # Model Comparisons
-AIC(mod_SS_fertil_b_1a, mod_SS_fertil_b_2a, mod_SS_fertil_b_3a, mod_SS_fertil_b_4a, mod_SS_fertil_b_5a, mod_SS_fertil_b_6a, mod_SS_fertil_b_7a, mod_SS_fertil_b_1b, mod_SS_fertil_b_2b, mod_SS_fertil_b_3b, mod_SS_fertil_b_4b, mod_SS_fertil_b_5b, mod_SS_fertil_b_6b, mod_SS_fertil_b_7b) 
-#of these, model 2b has lowest AIC (but 6b within 2 AIC)
-
 AIC(mod_SS_fertil_b_1c, mod_SS_fertil_b_2c, mod_SS_fertil_b_3c, mod_SS_fertil_b_4c, mod_SS_fertil_b_5c, mod_SS_fertil_b_6c, mod_SS_fertil_b_7c, mod_SS_fertil_b_1d, mod_SS_fertil_b_2d, mod_SS_fertil_b_3d, mod_SS_fertil_b_4d, mod_SS_fertil_b_5d, mod_SS_fertil_b_6d, mod_SS_fertil_b_7d) 
 #of these, model 6d has lowest AIC
 ```
@@ -1239,20 +905,8 @@ AIC(mod_SS_fertil_b_1c, mod_SS_fertil_b_2c, mod_SS_fertil_b_3c, mod_SS_fertil_b_
 And now to evaluate residuals of models...
 
 ```{r, echo=FALSE, warning=FALSE}
-# Residuals vs. Fitted Plots
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-
-resid_b_b <- resid(mod_SS_fertil_b_2b)
-fitted_b_b <- fitted(mod_SS_fertil_b_2b)
-plot(fitted_b_b, resid_b_b, main = "B: smd ~ mg_d_L, S = vmd,
-     random =  ~ mg_d_L | Ref/Comparison")
-abline(0,0)
-
-resid_b_b2 <- resid(mod_SS_fertil_b_6b)
-fitted_b_b2 <- fitted(mod_SS_fertil_b_6b)
-plot(fitted_b_b2, resid_b_b2, main = "B2: smd ~ mg_d_L, control = addSlist,
-     random =  ~ mg_d_L | Ref/Comparison")
-abline(0,0)
+# Residuals vs. Fitted Plots and Normal Q-Q Plot
+op <- par(mfrow = c(1,2), mar = c(2,2,4,1))
 
 resid_d_b <- resid(mod_SS_fertil_b_6d)
 fitted_d_b <- fitted(mod_SS_fertil_b_6d)
@@ -1260,24 +914,15 @@ plot(fitted_d_b, resid_d_b, main = "D: smd ~ mg_L, control = addSlist,
      random =  ~ mg_L | Ref/Comparison")
 abline(0,0)
 
-par(op)
-
-
-# Normal Q-Q Plot
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-qqnorm(resid_b_b)
-qqline(resid_b_b)
-qqnorm(resid_b_b2)
-qqline(resid_b_b2)
 qqnorm(resid_d_b)
 qqline(resid_d_b)
+
 par(op)
 
 
 # Patterns:
-# 1.  Residuals for all 3 best-fit models are very similar.
-# 2.  There could be non-linearities that need to be accounted for?
-# 3.  First let's check out a log-transformation of sediment exposure to see if that improves residuals...
+# 1.  There could be non-linearities that need to be accounted for?
+# 2.  First let's check out a log-transformation of sediment exposure to see if that improves residuals...
 ```
   
 Now let's try log transformation of the sediment predictor. I will use the base 10 logarithmic scale because it seems suitable for the spread of sediment exposure in all cases.
@@ -1286,18 +931,11 @@ Now let's try log transformation of the sediment predictor. I will use the base 
 #?mixmeta
 
 # Organizational Note: 
-#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
-#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
-#All models with 'a' or 'c' at the end of its name have fixed slopes, random intercepts.
-#All models with 'b' or 'd' at the end of its name have random slopes and intercepts.
+#All models have exposure concentration as its predictor. 
+#All models with 'c' at the end of its name have fixed slopes, random intercepts.
+#All models with 'd' at the end of its name have random slopes and intercepts.
 
 # LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_b_1a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ 1 | Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
-log_mod_SS_fertil_b_1b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                      random =  ~ log10(Sed_exposure_mg_d_L) | Comparison,
-                      data = ES_SS_fertilization_b2, method = "ml")
 log_mod_SS_fertil_b_1c <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                        random =  ~ 1 | Comparison,
                        data = ES_SS_fertilization_b2, method = "ml")
@@ -1306,12 +944,6 @@ log_mod_SS_fertil_b_1d <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                       data = ES_SS_fertilization_b2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_b_2a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ 1 | Ref/Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
-log_mod_SS_fertil_b_2b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                      random =  ~ log10(Sed_exposure_mg_d_L) | Ref/Comparison,
-                      data = ES_SS_fertilization_b2, method = "ml")
 log_mod_SS_fertil_b_2c <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                        random =  ~ 1 | Ref/Comparison,
                        data = ES_SS_fertilization_b2, method = "ml")
@@ -1320,12 +952,6 @@ log_mod_SS_fertil_b_2d <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                       data = ES_SS_fertilization_b2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_b_3a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ 1 | Ref_name/Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
-log_mod_SS_fertil_b_3b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                      random =  ~ log10(Sed_exposure_mg_d_L) | Ref_name/Comparison,
-                      data = ES_SS_fertilization_b2, method = "ml")
 log_mod_SS_fertil_b_3c <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                        random =  ~ 1 | Ref_name/Comparison,
                        data = ES_SS_fertilization_b2, method = "ml")
@@ -1334,12 +960,6 @@ log_mod_SS_fertil_b_3d <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                       data = ES_SS_fertilization_b2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_b_4a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ 1 | Ref_name/Ref/Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
-log_mod_SS_fertil_b_4b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L), S = vmd,
-                       random =  ~ log10(Sed_exposure_mg_d_L) | Ref_name/Ref/Comparison,
-                       data = ES_SS_fertilization_b2, method = "ml")
 log_mod_SS_fertil_b_4c <- mixmeta(smd ~ log10(Sed_level_standardized), S = vmd,
                        random =  ~ 1 | Ref_name/Ref/Comparison,
                        data = ES_SS_fertilization_b2, method = "ml")
@@ -1356,28 +976,22 @@ To account for within-comparison correlations in the mixmeta model, I replace th
 #covar_SS_fertilization_b <- by(ES_SS_fertilization_b, ES_SS_fertilization_b$Comparison, function(x) 
 #  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
 
+
 # LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON CORRELATIONS
 #Code for covariance matrix to include for addSlist for Comparison random effect
 newlist_FERT_log_b <- list(NA)
 for (i in seq(1,length(covar_SS_fertilization_b))) {
 newlist_FERT_log_b[i] <- list(covar_SS_fertilization_b[[i]]$S)
 }
-log_mod_SS_fertil_b_5a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ 1 | Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log_b))
-log_mod_SS_fertil_b_5b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ log10(Sed_exposure_mg_d_L) | Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log_b))
 log_mod_SS_fertil_b_5c <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ 1 | Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log_b))
 log_mod_SS_fertil_b_5d <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ log10(Sed_level_standardized) | Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log_b))
+
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
 #Code for covariance matrix to include for addSlist for Ref/Comparison
@@ -1397,22 +1011,15 @@ for (i in seq(1,length(unique(reflista$Ref))))  {
   newlist_FERT_log_b2[i] <- list(bdiagMat(templist_FERT_log_b2))
   templist_FERT_log_b2 <- list(NA)
 }
-log_mod_SS_fertil_b_6a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ 1 | Ref/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log_b2))
-log_mod_SS_fertil_b_6b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ log10(Sed_exposure_mg_d_L) | Ref/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log_b2))
 log_mod_SS_fertil_b_6c <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ 1 | Ref/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log_b2))
 log_mod_SS_fertil_b_6d <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ log10(Sed_level_standardized) | Ref/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log_b2))
+
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
 #Code for covariance matrix to include for addSlist for Ref_name/Comparison
@@ -1432,21 +1039,13 @@ for (i in seq(1,length(unique(reflista$Ref_name))))  {
   newlist_FERT_log_b3[i] <- list(bdiagMat(templist_FERT_log_b4))
   templist_FERT_log_b4 <- list(NA)
 }
-log_mod_SS_fertil_b_7a <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ 1 | Ref_name/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log_b3))
-log_mod_SS_fertil_b_7b <- mixmeta(smd ~ log10(Sed_exposure_mg_d_L),
-                       random = ~ log10(Sed_exposure_mg_d_L) | Ref_name/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_FERT_log_b3))
 log_mod_SS_fertil_b_7c <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ 1 | Ref_name/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log_b3))
 log_mod_SS_fertil_b_7d <- mixmeta(smd ~ log10(Sed_level_standardized),
                        random = ~ log10(Sed_level_standardized) | Ref_name/Comparison,
-                       data=ES_SS_fertilization_b2, method="ml", #using dataset without controls
+                       data=ES_SS_fertilization_b2, method="ml", #dataset without controls
                        control=list(addSlist=newlist_FERT_log_b3))
 ```
   
@@ -1455,9 +1054,6 @@ And now to compare relative fit of log-linear models...
 
 ```{r, echo=FALSE, warning=FALSE}
 # Model Comparisons
-AIC(log_mod_SS_fertil_b_1a, log_mod_SS_fertil_b_2a, log_mod_SS_fertil_b_3a, log_mod_SS_fertil_b_4a, log_mod_SS_fertil_b_5a, log_mod_SS_fertil_b_6a, log_mod_SS_fertil_b_7a, log_mod_SS_fertil_b_1b, log_mod_SS_fertil_b_2b, log_mod_SS_fertil_b_3b, log_mod_SS_fertil_b_4b, log_mod_SS_fertil_b_5b, log_mod_SS_fertil_b_6b, log_mod_SS_fertil_b_7b) 
-#of these, model 6b has lowest AIC (but 2b,3b,7b within 2 AIC)
-
 AIC(log_mod_SS_fertil_b_1c, log_mod_SS_fertil_b_2c, log_mod_SS_fertil_b_3c, log_mod_SS_fertil_b_4c, log_mod_SS_fertil_b_5c, log_mod_SS_fertil_b_6c, log_mod_SS_fertil_b_7c, log_mod_SS_fertil_b_1d, log_mod_SS_fertil_b_2d, log_mod_SS_fertil_b_3d, log_mod_SS_fertil_b_4d, log_mod_SS_fertil_b_5d, log_mod_SS_fertil_b_6d, log_mod_SS_fertil_b_7d) 
 #of these, model 3d has lowest AIC (but 2d,7d,6d within 2 AIC)
 ```
@@ -1465,20 +1061,8 @@ AIC(log_mod_SS_fertil_b_1c, log_mod_SS_fertil_b_2c, log_mod_SS_fertil_b_3c, log_
 And now to evaluate residuals of models...
 
 ```{r, echo=FALSE, warning=FALSE}
-# Residuals vs. Fitted Plots
+# Residuals vs. Fitted Plots and Normal Q-Q Plots
 op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-
-resid_log_b_b <- resid(log_mod_SS_fertil_b_2b)
-fitted_log_b_b <- fitted(log_mod_SS_fertil_b_2b)
-plot(fitted_log_b_b, resid_log_b_b, main = "B: smd ~ log(mg_d_L), S = vmd,
-     random =  ~ log(mg_d_L) | Ref/Comparison")
-abline(0,0)
-
-resid_log_b_b2 <- resid(log_mod_SS_fertil_b_6b)
-fitted_log_b_b2 <- fitted(log_mod_SS_fertil_b_6b)
-plot(fitted_log_b_b2, resid_log_b_b2, main = "B2: smd ~ log(mg_d_L), control = addSlist,
-     random =  ~ log(mg_d_L) | Ref/Comparison")
-abline(0,0)
 
 resid_log_d_b <- resid(log_mod_SS_fertil_b_3d)
 fitted_log_d_b <- fitted(log_mod_SS_fertil_b_3d)
@@ -1492,170 +1076,23 @@ plot(fitted_log_d_b2, resid_log_d_b2, main = "D2: smd ~ log(mg_L), S = vmd,
      random =  ~ log(mg_L) | Ref_name/Comparison")
 abline(0,0)
 
-par(op)
-
-
-# Normal Q-Q Plot
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-qqnorm(resid_log_b_b)
-qqline(resid_log_b_b)
-qqnorm(resid_log_b_b2)
-qqline(resid_log_b_b2)
 qqnorm(resid_log_d_b)
 qqline(resid_log_d_b)
 qqnorm(resid_log_d_b2)
 qqline(resid_log_d_b2)
-par(op)
-
-
-# Patterns:
-# 1.  Residuals for all 4 best-fit models are very similar.
-# 2.  Looks waaaaay better! Magnitude of residuals down and spread much more "acceptable".
-# 3.  Q-Q plots still looking "meh" on low end of x-axis -- but no obvious reason to fit non-linear models.
-```
-  
-Out of curiosity, I will fit non-linear versions of these logarithmic models, so see if anything improves...
-```{r, echo=FALSE, warning=FALSE}
-#NON-LINEAR LOGARITHMIC MODELS, IF NEEDED
-# Calculate 1st and 3rd quartiles of exposure, to assign 'knots' for non-linear models
-log10_mg_d_L <- log10(ES_SS_fertilization_b2$Sed_exposure_mg_d_L)
-#summary(log10_mg_d_L)
-#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#-0.4559  0.5185  0.9569  0.9632  1.5051  2.1072 
-log10_mg_L <- log10(ES_SS_fertilization_b2$Sed_level_standardized)
-#summary(log10_mg_L)
-#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-# 0.6021  1.5051  1.9657  1.8844  2.3617  3.0103 
-
-# NON-LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
-log_mod_SS_fertil_b_NL2b <- mixmeta(smd ~ ns(log10(Sed_exposure_mg_d_L), 
-                                                  knots = c(0.5185,1.5051)), 
-                         random = ~ ns(log10(Sed_exposure_mg_d_L), 
-                                       knots = c(0.5185,1.5051)) | Ref/Comparison, 
-                         data = ES_SS_fertilization_b2, method = "ml", S = vmd)
-log_mod_SS_fertil_b_NL6b <- mixmeta(smd ~ ns(log10(Sed_exposure_mg_d_L), knots = c(0.5185,1.5051)), 
-                         random = ~ ns(log10(Sed_exposure_mg_d_L), 
-                                       knots = c(0.5185,1.5051)) | Ref/Comparison, 
-                         data = ES_SS_fertilization_b2, method = "ml",
-                         control = list(addSlist=newlist_FERT_log_b2))
-log_mod_SS_fertil_b_NL3d <- mixmeta(smd ~ ns(log10(Sed_level_standardized), 
-                                                  knots = c(1.5051,2.3617)),
-                         random = ~ ns(log10(Sed_level_standardized), 
-                                       knots = c(1.5051,2.3617)) | Ref_name/Comparison, 
-                         data = ES_SS_fertilization_b2, method = "ml", S = vmd)
-log_mod_SS_fertil_b_NL2d <- mixmeta(smd ~ ns(log10(Sed_level_standardized), knots = c(1.5051,2.3617)), 
-                         random = ~ ns(log10(Sed_level_standardized), 
-                                       knots = c(1.5051,2.3617)) | Ref/Comparison, 
-                         data = ES_SS_fertilization_b2, method = "ml", S = vmd)
-
-# SIMPLIFY THE MODEL BY ALLOWING NON-LINEARITY ONLY IN FIXED EFFECTS
-log_mod_SS_fertil_b_NL2b_2 <- update(log_mod_SS_fertil_b_NL2b, 
-                               random = ~ log10(Sed_exposure_mg_d_L) | Ref/Comparison)
-log_mod_SS_fertil_b_NL6b_2 <- update(log_mod_SS_fertil_b_NL6b, 
-                               random = ~ log10(Sed_exposure_mg_d_L) | Ref/Comparison)
-log_mod_SS_fertil_b_NL3d_2 <- update(log_mod_SS_fertil_b_NL3d, 
-                               random= ~ log10(Sed_level_standardized) | Ref_name/Comparison)
-log_mod_SS_fertil_b_NL2d_2 <- update(log_mod_SS_fertil_b_NL2d, 
-                               random= ~ log10(Sed_level_standardized) | Ref/Comparison)
-
-AIC(log_mod_SS_fertil_b_NL2b, log_mod_SS_fertil_b_NL2b_2, log_mod_SS_fertil_b_NL6b, log_mod_SS_fertil_b_NL6b_2) #NL6b
-AIC(log_mod_SS_fertil_b_NL3d, log_mod_SS_fertil_b_NL3d_2, log_mod_SS_fertil_b_NL2d, log_mod_SS_fertil_b_NL2d_2) #NL3d_2 or 2d_2
-```
-  
-And now to evaluate residuals of non-linear models...
-```{r, echo=FALSE, warning=FALSE}
-# Residuals vs. Fitted Plots
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-
-new_resid_b_b <- resid(log_mod_SS_fertil_b_NL2b_2)
-new_fitted_b_b <- fitted(log_mod_SS_fertil_b_NL2b_2)
-plot(new_fitted_b_b, new_resid_b_b, main = "B: smd ~ ns(log_mg_d_L), S = vmd,
-     random =  ~ log_mg_d_L | Ref/Comparison")
-abline(0,0)
-
-new_resid_b_b2 <- resid(log_mod_SS_fertil_b_NL6b)
-new_fitted_b_b2 <- fitted(log_mod_SS_fertil_b_NL6b)
-plot(new_fitted_b_b2, new_resid_b_b2, main = "B2: smd ~ ns(log_mg_d_L), control = addSlist,
-     random =  ~ ns(log_mg_d_L) | Ref/Comparison")
-abline(0,0)
-#log_mod_SS_fertil_b_2b has slightly lower AIC but residuals much more extreme in magnitude
-
-new_resid_d_b <- resid(log_mod_SS_fertil_b_NL3d_2)
-new_fitted_d_b <- fitted(log_mod_SS_fertil_b_NL3d_2)
-plot(new_fitted_d_b, new_resid_d_b, main = "D: smd ~ ns(log_mg_L), S = vmd,
-     random =  ~ log_mg_L | Ref_name/Comparison")
-abline(0,0)
-
-new_resid_d_b2 <- resid(log_mod_SS_fertil_b_NL2d_2)
-new_fitted_d_b2 <- fitted(log_mod_SS_fertil_b_NL2d_2)
-plot(new_fitted_d_b2, new_resid_d_b2, main = "D2: smd ~ ns(log_mg_L), S = vmd,
-     random =  ~ log_mg_L | Ref/Comparison")
-abline(0,0)
 
 par(op)
-
-
-# Normal Q-Q Plot
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-qqnorm(new_resid_b_b)
-qqline(new_resid_b_b)
-qqnorm(new_resid_b_b2)
-qqline(new_resid_b_b2)
-qqnorm(new_resid_d_b)
-qqline(new_resid_d_b)
-qqnorm(new_resid_d_b2)
-qqline(new_resid_d_b2)
-par(op)
-
-
-# Patterns:
-# 1.  Very similar to residuals for linear models, so no complaints!
 ```
   
-The residuals for the non-linear, logarithmic models are very similar to the analogous linear, logarithmic models. I will defer to the linear models because they are simpler.
+Patterns:
+1.  Residuals for best-fit models are very similar.
+2.  Looks waaaaay better! Magnitude of residuals down and spread much more "acceptable".
+3.  Q-Q plots still looking "meh" on low end of x-axis -- but no obvious reason to fit non-linear models.
+  
   
 ### 4. Best-Fit Model Summary
   
-#### i. Cumulative exposure is PREDICTOR
-Now I will predict the effect size along the exposure range and plot with confidence intervals.  
-
-```{r, echo=FALSE, warning=FALSE}
-summary(log_mod_SS_fertil_b_6b)
-
-# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
-pred_log_mod_SS_fertil_b_6b <- predict(log_mod_SS_fertil_b_6b, newdata=ES_SS_fertilization_b2, ci=TRUE)
-ES_SS_fertilization_b2_CI2 <- cbind(ES_SS_fertilization_b2, pred_log_mod_SS_fertil_b_6b)
-#head(ES_SS_fertilization_b2_CI2)
-min_exp_b <- ES_SS_fertilization_b2_CI2 %>% 
-  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
-  filter(overlap0==FALSE) %>% 
-  filter(ci.ub<0) %>% 
-  summarize(min_exp_b=min(Sed_exposure_mg_d_L))
-min_exp_b2 <- as.numeric(min_exp_b)
-
-ggplot(ES_SS_fertilization_b2_CI2, 
-       aes(x = Sed_exposure_mg_d_L,
-           y = smd,
-           color = Ref,
-           ymin = smd-vmd,
-           ymax = smd+vmd)) + 
-  geom_pointrange() +
-  labs(x = "Sediment cumulative exposure (mg x day/L)",
-       y = expression("Effect size (Hedges'"~italic(d)~"+/- s.d.)"),
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  geom_vline(xintercept=min_exp_b2, linetype="dashed", color = "red") +
-  geom_line(aes(x = Sed_exposure_mg_d_L, y = fit), inherit.aes=FALSE) +
-  geom_ribbon(aes(x = Sed_exposure_mg_d_L, y = smd,
-                  ymin = ci.lb, ymax = ci.ub), 
-              fill = "grey70", alpha = .15, 
-              show.legend=FALSE, inherit.aes=FALSE) +
-  theme_classic() +
-  scale_x_log10(limits = c(0.1,150), breaks=c(0.1,1,10,100,min_exp_b2), 
-                label=c("0.1","1","10","100",round(min_exp_b2, digits = 1)))
-```
-  
-#### ii. Exposure concentration is PREDICTOR
+#### i. Exposure concentration is PREDICTOR
 Now I will predict the effect size along the exposure range and plot with confidence intervals.  
 
 ```{r, echo=FALSE, warning=FALSE}
@@ -1702,6 +1139,7 @@ ggplot(ES_SS_fertilization_b2_CI4,
   scale_x_log10(limits = c(1,1000), breaks=c(1,10,100,1000,min_conc_d2), 
                 label=c("1","10","100","1000",round(min_conc_d2,digits=1)))
 
+#For Fig. 2C of report...
 ggplot(ES_SS_fertilization_b2_CI4, 
        aes(x = Sed_level_standardized,
            y = smd, size = 4)) + 
