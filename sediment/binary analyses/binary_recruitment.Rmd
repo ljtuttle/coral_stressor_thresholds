@@ -510,19 +510,33 @@ recruitSS2 %>% tally()
 #Models with fixed effect(s) only
 modSS1 <- glm(Binary_recruit_death ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = recruitSS2)
+modSS2 <- glm(Binary_recruit_death ~ Sed_level_stand_mg + Sed_exposure_days, 
+            family = binomial(link = "logit"), data = recruitSS2)
+modSS3 <- glm(Binary_recruit_death ~ Sed_level_stand_mg*Sed_exposure_days, 
+            family = binomial(link = "logit"), data = recruitSS2)
 modSS1b <- glm(Binary_recruit_death ~ Sed_level_stand_mg + Coral_age_at_start_expt_days_since_settled, 
             family = binomial(link = "logit"), data = recruitSS2)
+modSS2b <- glm(Binary_recruit_death ~ 
+                 Sed_level_stand_mg + Sed_exposure_days + Coral_age_at_start_expt_days_since_settled, 
+            family = binomial(link = "logit"), data = recruitSS2)
+modSS3b <- glm(Binary_recruit_death ~ Sed_level_stand_mg*Sed_exposure_days + Coral_age_at_start_expt_days_since_settled, 
+            family = binomial(link = "logit"), data = recruitSS2)
+AIC(modSS1b,modSS2b,modSS3b,modSS1,modSS2,modSS3) #no obvious need to have coral age as a predictor
 
-#models with random effect for coral species (only one study)
-modSS2 <- glmer(Binary_recruit_death ~ Sed_level_stand_mg + (1 | Gsp), 
+#Models with random effect for coral species or study
+modSS4 <- glmer(Binary_recruit_death ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = recruitSS2)
-#singular
-#modSS2b <- glmer(Binary_recruit_death ~ Sed_level_stand_mg + #Coral_age_at_start_expt_days_since_settled + (1 | Gsp), 
+modSS5 <- glmer(Binary_recruit_death ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
+              family = binomial, data = recruitSS2)
+modSS6 <- glmer(Binary_recruit_death ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp), 
+              family = binomial, data = recruitSS2)
+#modSS7 <- glmer(Binary_recruit_death ~ Sed_level_stand_mg + (1 | Ref), 
 #              family = binomial, data = recruitSS2)
-#Error in pwrssUpdate(pp, resp, tol = tolPwrss, GQmat = GQmat, compDev = compDev, : (maxstephalfit) PIRLS step-halvings failed to reduce deviance in pwrssUpdate
+#can't have Ref as a random effect bc not enough grouping factors
+
 
 #model comparison and summary
-AIC(modSS1,modSS1b,modSS2) #1 best
+AIC(modSS1,modSS2,modSS3,modSS4,modSS5,modSS6) #1/2/3 best
 print(summary(modSS1), correlation=FALSE) #no error
 ```
   
