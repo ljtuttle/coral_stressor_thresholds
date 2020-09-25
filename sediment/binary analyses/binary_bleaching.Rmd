@@ -14,7 +14,7 @@ library(pROC)
 library(effects)
 library(lattice)
 library(MuMIn)
-binary <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/coral_stressor_thresholds/sediment/data/binary_ALL.csv", header=T)
+binary <- read.csv("data/binary_ALL.csv", header=T)
 
 #keyboard shortcuts to remember: 
 #command-option-I inserts new code chunk
