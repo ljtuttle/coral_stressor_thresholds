@@ -1,7 +1,7 @@
 ---
-title: "Effects of sediment on the photosynthesis of adult corals"
+title: "Binary effects of sediment on the photosynthesis of adult corals"
 author: "Lillian J. Tuttle"
-date: "6/22/2020"
+date: "9/24/2020"
 output: html_document
 ---
 
@@ -14,8 +14,7 @@ library(pROC)
 library(effects)
 library(lattice)
 library(MuMIn)
-binaryDS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/binary/binaryDS.csv", header=T)
-binarySS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/binary/binarySS.csv", header=T)
+binary <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/coral_stressor_thresholds/sediment/data/binary_ALL.csv", header=T)
 
 #keyboard shortcuts to remember: 
 #command-option-I inserts new code chunk
@@ -31,17 +30,21 @@ binarySS <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sed
 Specifically, we will explore the results of 438 datapoints from 15 studies conducted in 3 oceans on 36 species within 23 genera.
 
 ```{r, echo=FALSE, warning=FALSE}
-#head(photosynthesisDS)
-photosynthesisDS <- binaryDS %>%
+#head(photoDS)
+photoDS <- binary %>%
+  filter(DS_SS=="DS") %>% 
+  filter(Coral_age_class=="adult") %>%
   mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
-  filter(!is.na(Binary_reduced_PR_ratio) | !is.na(Binary_reduced_FvFm))
-photosynthesisDS %>% tally() #n=438 datapoints, tally() returns same result as count(photosynthesisDS)
-photosynthesisDS %>% count(Ref, sort=T) #n=15 studies
-photosynthesisDS %>% count(Ref_name, sort=T) #n=15 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-photosynthesisDS %>% count(Ocean, sort=T) #n=4 oceans (one is Indo-Pacific)
-photosynthesisDS %>% count(Gsp) %>% #n=36 species
+  filter(!is.na(Binary_reduced_PR_ratio) | !is.na(Binary_reduced_FvFm))%>% 
+  filter(Binary_sed_burial=="0") %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Binary_reduced_FvFm, Binary_reduced_PR_ratio, Updated_Genus, Gsp, Ocean, Sed_exposure_days)
+photoDS %>% tally() #n=438 datapoints, tally() returns same result as count(photoDS)
+photoDS %>% count(Ref, sort=T) #n=15 studies
+photoDS %>% count(Ref_name, sort=T) #n=15 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
+photoDS %>% count(Ocean, sort=T) #n=4 oceans (one is Indo-Pacific)
+photoDS %>% count(Gsp) %>% #n=36 species
   top_n(10)
-photosynthesisDS %>% count(Updated_Genus, sort=T) %>% #n=23 genera
+photoDS %>% count(Updated_Genus, sort=T) %>% #n=23 genera
   top_n(10)
 ```
   
@@ -50,12 +53,14 @@ Specifically, we will explore the results of 251 datapoints from 7 studies condu
 
 ```{r, echo=FALSE, warning=FALSE}
 #head(binarySS)
-photoSS <- binarySS %>%
+photoSS <- binary %>%
+  filter(DS_SS=="SS") %>% 
+  filter(Coral_age_class=="adult") %>%
   mutate(Gsp = paste(Updated_Genus, Updated_species, sep = "_")) %>% 
-  filter(Coral_age_class=="adult") %>% #only adult corals
   filter(!is.na(Binary_reduced_FvFm & Binary_reduced_PR_ratio)) %>% 
+  select(Ref, Ref_name, Control_code, Sed_level_stand_mg, Binary_reduced_FvFm, Binary_reduced_PR_ratio, Updated_Genus, Gsp, Ocean, Sed_exposure_days) %>% 
   filter(!str_detect(Ref, "SS26")) %>% #removes study that reported P/R ratio for NTU only (Telesnicki and Goldberg 1995)
-  mutate(Sed_level_mg_L_num = as.numeric(Sed_level_mg_L))
+  mutate(Sed_level_stand_mg = as.numeric(Sed_level_stand_mg))
 photoSS %>% tally() #n=251 datapoints, tally() returns same result as count(photoSS)
 photoSS %>% count(Ref, sort=T) #n=7 studies
 photoSS %>% count(Ref_name, sort=T) #n=6 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
@@ -75,9 +80,7 @@ First let's explore all data from all species for which there is binary data abo
 ```{r, echo=FALSE, warning=FALSE}
 #DEPOSITED SEDIMENT
 #Photosynthetic efficiency, plotted by exposure concentration (x) and exposure duration (y)
-photo_eff <- photosynthesisDS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_cm2_d, Binary_reduced_FvFm, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Sed_days, Sed_origin, Sed_grain_class, Binary_sed_burial) %>% 
-  filter(Binary_sed_burial=="0") %>% #remove all studies that buried corals instead of giving them a specific dosage (in mg/cm2/day)
+photo_eff <- photoDS %>% 
   filter(!is.na(Binary_reduced_FvFm)) #remove NAs (studies that did not describe photosynthetic efficiency)
 #photo_eff %>% tally() #n=372 datapoints, tally() returns same result as count(photo_eff)
 #photo_eff %>% count(Ref, sort=T) #n=9 studies
@@ -87,8 +90,8 @@ photo_eff <- photosynthesisDS %>%
 #head(photo_eff)
 
 photo_eff_plot <- ggplot(data=photo_eff, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
+      x = Sed_level_stand_mg, 
+      y = Sed_exposure_days,
       color = factor(Binary_reduced_FvFm),
       shape = factor(Binary_reduced_FvFm),
       position = "jitter",
@@ -109,20 +112,18 @@ photo_eff_plot <- ggplot(data=photo_eff, mapping = aes(
     theme_bw()
 
 #P/R ratio, plotted by exposure concentration (x) and exposure duration (y)
-PR_ratio <- photosynthesisDS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_cm2_d, Binary_reduced_PR_ratio, Updated_Genus, Gsp, Ocean, Sed_exposure_days, Sed_days, Sed_origin, Sed_grain_class, Binary_sed_burial) %>% 
-  filter(Binary_sed_burial=="0") %>% #remove all studies that buried corals instead of giving them a specific dosage (in mg/cm2/day)
+PR_ratio <- photoDS %>% 
   filter(!is.na(Binary_reduced_PR_ratio)) #remove NAs (studies that did not describe large necroses)
-PR_ratio %>% tally() #n=60 datapoints, tally() returns same result as count(PR_ratio)
-PR_ratio %>% count(Ref, sort=T) #n=5 studies
-PR_ratio %>% count(Ref_name, sort=T) #n=5 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-PR_ratio %>% count(Gsp, sort=T) #n=16 species
-PR_ratio %>% count(Updated_Genus, sort=T) #n=15 genera, top four: Galaxea n=8, Goniopora n=8, Orbicella n=6, Porites n=4 
+#PR_ratio %>% tally() #n=60 datapoints, tally() returns same result as count(PR_ratio)
+#PR_ratio %>% count(Ref, sort=T) #n=5 studies
+#PR_ratio %>% count(Ref_name, sort=T) #n=5 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
+#PR_ratio %>% count(Gsp, sort=T) #n=16 species
+#PR_ratio %>% count(Updated_Genus, sort=T) #n=15 genera, top four: Galaxea n=8, Goniopora n=8, Orbicella n=6, Porites n=4 
 #head(PR_ratio)
         
 PR_ratio_plot <- ggplot(data=PR_ratio, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
+      x = Sed_level_stand_mg, 
+      y = Sed_exposure_days,
       color = factor(Binary_reduced_PR_ratio),
       shape = factor(Binary_reduced_PR_ratio),
       position = "jitter",
@@ -144,7 +145,6 @@ PR_ratio_plot <- ggplot(data=PR_ratio, mapping = aes(
 #SUSPENDED SEDIMENT
 #Photosynthetic efficiency, plotted by exposure concentration (x) and exposure duration (y)
 photo_effSS <- photoSS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_L_num, Binary_reduced_FvFm, Updated_Genus, Gsp, Ocean, Sed_exposure_days) %>% 
   filter(!is.na(Binary_reduced_FvFm)) #remove NAs (studies that did not describe Fv/Fm)
 #photo_effSS %>% tally() #n=238 datapoints, tally() returns same result as count(photo_effSS)
 #photo_effSS %>% count(Ref, sort=T) #n=5 studies
@@ -153,7 +153,7 @@ photo_effSS <- photoSS %>%
 #photo_effSS %>% count(Updated_Genus, sort=T) #n=6 genera, top four: Acropora n=56, Platygyra n=50, Merulina n=49, Pachyseris n=47
 
 photo_effSS_plot <- ggplot(data=photo_effSS, mapping = aes(
-      x = Sed_level_mg_L_num, 
+      x = Sed_level_stand_mg, 
       y = Sed_exposure_days,
       color = factor(Binary_reduced_FvFm),
       shape = factor(Binary_reduced_FvFm),
@@ -176,7 +176,6 @@ photo_effSS_plot <- ggplot(data=photo_effSS, mapping = aes(
 
 #P/R ratio, plotted by exposure concentration (x) and exposure duration (y)
 PR_ratioSS <- photoSS %>% 
-  select(Ref, Ref_name, Control_code, Sed_level_mg_L_num, Binary_reduced_PR_ratio, Updated_Genus, Gsp, Ocean, Sed_exposure_days) %>% 
   filter(!is.na(Binary_reduced_PR_ratio)) #remove NAs (studies that did not describe P/R ratio)
 #PR_ratioSS %>% tally() #n=49 datapoints, tally() returns same result as count(PR_ratioSS)
 #PR_ratioSS %>% count(Ref, sort=T) #n=3 studies
@@ -185,7 +184,7 @@ PR_ratioSS <- photoSS %>%
 #PR_ratioSS %>% count(Updated_Genus, sort=T) #n=4 genera, top four: Merulina n=16, Pachyseris n=16, Platygyra n=16, Montipora n=1
 
 PR_ratioSS_plot <- ggplot(data=PR_ratioSS, mapping = aes(
-      x = Sed_level_mg_L_num, 
+      x = Sed_level_stand_mg, 
       y = Sed_exposure_days,
       color = factor(Binary_reduced_PR_ratio),
       shape = factor(Binary_reduced_PR_ratio),
@@ -222,154 +221,6 @@ PR_ratioSS_plot + geom_point(data = subset(PR_ratioSS, Binary_reduced_PR_ratio==
 ```
   
   
-### Exploring the same plots with PLOTLY...  
-
-##### Photosynthetic efficiency
-**Legend**: Reduced photosynthetic efficiency due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different genera.
-  
-**Deposited sediment**: All species, n=324 datapoints, n=8 studies, n=12 genera
-```{r, echo=FALSE, warning=FALSE}
-photo_eff_plot2 <- ggplot(data=photo_eff) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      shape = factor(Binary_reduced_FvFm),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sedimentation rate (mg/cm2/d)", 
-         y = "Exposure duration (days)",
-         shape = "Reduced photosynthetic\nefficiency due\nto sedimentation?",
-         color = "Genus") +
-    scale_x_continuous(trans='log10', limits = c(0.01,1000), 
-                       breaks=c(0.01,0.1,1,10,100,1000), 
-                       label=c("0.01","0.1","1","10","100","1000")) +
-    scale_y_log10(limits = c(0.1,100), breaks=c(0.1,1,10,100), 
-                  label=c("0.1","1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-photo_eff_plotly <- ggplotly(photo_eff_plot2, tooltip="text")
-photo_eff_plotly #plot where I can hover over points and get species, but legend cut-off
-```
-  
-**Suspended sediment**: All species, n=238 datapoints, n=5 studies, n=6 genera
-```{r, echo=FALSE, warning=FALSE}
-photo_effSS_plot2 <- ggplot(data=photo_effSS) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_L_num,
-      y = Sed_exposure_days,
-      shape = factor(Binary_reduced_FvFm),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Total suspended sediment (mg/L)", 
-         y = "Exposure duration (days)",
-         shape = "Reduced photosynthetic\nefficiency due to\nsuspended sediment?",
-         color = "Genus") +
-    scale_x_log10(limits = c(0.1,100), breaks=c(0.1,1,10,100),
-                  label=c("0.1","1","10","100")) +
-    scale_y_log10(limits = c(1,100), breaks=c(1,10,100),
-                  label=c("1","10","100")) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-photo_effSS_plotly <- ggplotly(photo_effSS_plot2, tooltip="text")
-photo_effSS_plotly #plot where I can hover over points and get species, but legend cut-off
-```
-  
-  
-##### P/R ratio
-**Legend**: Reduced P/R ratio due sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different genera.
-  
-**Deposited sediment**: All species, n=46 datapoints, n=4 studies, n=14 genera
-```{r, echo=FALSE, warning=FALSE}
-PR_ratio_plot2 <- ggplot(data=PR_ratio) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      shape = factor(Binary_reduced_PR_ratio),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Sedimentation rate (mg/cm2/d)", 
-         y = "Exposure duration (days)",
-         shape = "Reduced P/R ratio due\nto sedimentation?",
-         color = "Genus") +
-    scale_x_continuous(limits = c(0,65)) +
-    scale_y_continuous(limits = c(0,30)) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-PR_ratio_plotly <- ggplotly(PR_ratio_plot2, tooltip="text")
-#PR_ratio_plotly #plot where I can hover over points and get species, but legend cut-off
-#hmmmm, an error: Error in gsub("\n", br(), a, fixed = TRUE) : input string 1 is invalid in this locale
-```
-**NOTE**: Having trouble getting this figure to work. Needs attention. Error: "Error in gsub("\n", br(), a, fixed = TRUE) : input string 1 is invalid in this locale"    
-  
-**Suspended sediment**: All species, n=49 datapoints, n=3 studies, n=4 genera
-```{r, echo=FALSE, warning=FALSE}
-PR_ratioSS_plot2 <- ggplot(data=PR_ratioSS) +
-    geom_point(mapping = aes(
-      x = Sed_level_mg_L_num, 
-      y = Sed_exposure_days,
-      shape = factor(Binary_reduced_PR_ratio),
-      color = Updated_Genus,
-      position = "jitter",
-      text = Gsp)) + 
-    labs(x = "Total suspended sediment (mg/L)", 
-         y = "Exposure duration (days)",
-         shape = "Reduced P/R ratio due\nto suspended sediment?",
-         color = "Genus") +
-    scale_x_log10(limits = c(10,1000), breaks=c(10,100,1000),
-                  label=c("10","100","1000")) +
-    scale_y_continuous(limits = c(0,60)) +
-    scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-    theme_bw()
-PR_ratioSS_plotly <- ggplotly(PR_ratioSS_plot2, tooltip="text")
-PR_ratioSS_plotly #plot where I can hover over points and get species, but legend cut-off
-```
-  
-  
-### *Montipora* spp. only for Deposited Sediment
-*Montipora* is the genus with the most data and appears to be among the most sensitive, so let's explore it individually for photosynthetic efficiency:
-
-```{r, echo=FALSE, warning=FALSE}
-eff_montipora <- photo_eff %>% 
-  filter(Updated_Genus=="Montipora")
-#eff_montipora %>% tally() #n=208 datapoints, tally() returns same result as count(eff_montipora)
-#eff_montipora %>% count(Ref_name, sort=T) #n=4 studies, count(Ref_name) = group_by(Ref_name) %>% tally()
-#eff_montipora %>% count(Gsp, sort=T) #n=6 species, same as nlevels(as.factor(eff_montipora$Gsp))
-  
-eff_mont_plot <- ggplot(data=eff_montipora) +
-  geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
-      y = Sed_days,
-      shape = factor(Binary_reduced_FvFm),
-      color = Gsp,
-      position = "jitter",
-      text = Gsp)) + 
-  labs(x = "Sedimentation rate (mg/cm2/d)", 
-       y = "Exposure duration (days)",
-       color = "Species",
-       shape = "Reduced photosynthetic\nefficiency due\nto sedimentation?") +
-  scale_shape_manual(breaks = c("0","1"), values = c(21,15)) +
-  scale_y_log10(limits = c(0.1,20), breaks=c(0.1,1,10), 
-                  label=c("0.1","1","10")) +
-  theme_bw()
-
-
-#PLOTS:
-eff_mont_plot + labs(title="Photosynthetic efficiency, Montipora spp. only", 
-                     subtitle = "n=208 datapoints, n=4 studies, n=6 spp.")
-```
-
-##### Photosynthetic efficiency, Montipora spp. only, n=208 datapoints, n=4 studies, n=6 spp.
-**Legend**: Reduced photosynthetic efficiency due to sedimentation? Empty circles are no (0), and filled squares are yes (1). Colors are for different genera.
-```{r, echo=FALSE, warning=FALSE}
-#PLOTS:
-eff_mont_plotly <- ggplotly(eff_mont_plot, tooltip= c("x", "y", "text"))
-eff_mont_plotly
-```
-   
-  
 # Threshold Analyses with Binary Data 
 Now let's calculate the thresholds for each category of photosynthesis, based on the binary data explored above.  
 
@@ -386,29 +237,26 @@ Now let's calculate the thresholds for each category of photosynthesis, based on
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_photo_eff <- photo_eff %>% 
   filter(Binary_reduced_FvFm=="1") %>%
-  arrange(Sed_level_mg_cm2_d) #minimum Sedimentation level is 25
+  arrange(Sed_level_stand_mg) #minimum Sedimentation level is 25
 
 #LOAEL
-summarize(adverse_photo_eff, LOAEL=min(Sed_level_mg_cm2_d)) #LOAEL is 25 and comes from Flores et al. (2012).
-loaelDS1 <- adverse_photo_eff %>% summarize(min(Sed_level_mg_cm2_d))
+summarize(adverse_photo_eff, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 25 and comes from Flores et al. (2012).
+loaelDS1 <- adverse_photo_eff %>% summarize(min(Sed_level_stand_mg))
 loaelDS1 <- as.numeric(loaelDS1)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_photo_eff <- photo_eff %>%
   filter(Binary_reduced_FvFm=="0") %>%
-  arrange(desc(Sed_level_mg_cm2_d)) %>%
-  filter(Sed_level_mg_cm2_d<=25) #less than or equal to the LOAEL, which = 25
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=25) #less than or equal to the LOAEL, which = 25
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_photo_eff, NOAEL=max(Sed_level_mg_cm2_d)) #NOAEL is 25
+summarize(non_adverse_photo_eff, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 25
 
 #PLOT
-photosynthesisDS %>% 
-  select(Ocean, Region, Genus, species, Binary_sed_burial, Sed_level_mg_cm2_d, Binary_reduced_FvFm) %>% 
-  filter(Binary_sed_burial=="0") %>% #remove all studies that buried corals instead of giving them a specific dosage (in mg/cm2/day)
-  ggplot() +
+ggplot(data = photoDS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_FvFm)) + 
     labs(x = "Sedimentation rate (mg/cm2/d)", 
          y = "Reduced photosynthetic efficiency\ndue to sedimentation?") +
@@ -422,19 +270,19 @@ photosynthesisDS %>%
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_photo_eff2 <- photo_eff %>% 
   filter(Binary_reduced_FvFm=="1") %>% 
-  filter(!is.na(Sed_days)) %>% 
-  arrange(Sed_days)
+  filter(!is.na(Sed_exposure_days)) %>% 
+  arrange(Sed_exposure_days)
 
 #LOAEL
-summarize(adverse_photo_eff2, LOAEL=min(Sed_days)) #LOAEL is 0.5 days = 12 h
+summarize(adverse_photo_eff2, LOAEL=min(Sed_exposure_days)) #LOAEL is 0.5 days = 12 h
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_photo_eff2 <- photo_eff %>%
   filter(Binary_reduced_FvFm=="0") %>%
-  filter(Sed_days<=0.5) #less than or equal to the LOAEL, which = 0.5
+  filter(Sed_exposure_days<=0.5) #less than or equal to the LOAEL, which = 0.5
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_photo_eff2, NOAEL=max(Sed_days)) #NOAEL is 0.5 days
+summarize(non_adverse_photo_eff2, NOAEL=max(Sed_exposure_days)) #NOAEL is 0.5 days
 
 #PLOT LOAELs
 photo_eff_plot + geom_point(data = subset(photo_eff, Binary_reduced_FvFm=="1")) +
@@ -455,29 +303,26 @@ photo_eff_plot + geom_point(data = subset(photo_eff, Binary_reduced_FvFm=="1")) 
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_PR_ratio <- PR_ratio %>% 
   filter(Binary_reduced_PR_ratio=="1") %>%
-  arrange(Sed_level_mg_cm2_d)
+  arrange(Sed_level_stand_mg)
 
 #LOAEL
-summarize(adverse_PR_ratio, LOAEL=min(Sed_level_mg_cm2_d)) #LOAEL is 26.4 and comes from Hodgson (1989b) Chapter IV - field component.
-loaelDS2 <- adverse_PR_ratio %>% summarize(min(Sed_level_mg_cm2_d))
+summarize(adverse_PR_ratio, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 26.4 and comes from Hodgson (1989b) Chapter IV - field component.
+loaelDS2 <- adverse_PR_ratio %>% summarize(min(Sed_level_stand_mg))
 loaelDS2 <- as.numeric(loaelDS2)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_PR_ratio <- PR_ratio %>%
   filter(Binary_reduced_PR_ratio=="0") %>%
-  arrange(desc(Sed_level_mg_cm2_d)) %>%
-  filter(Sed_level_mg_cm2_d<=26.4) #less than or equal to the LOAEL, which = 26.4
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=26.4) #less than or equal to the LOAEL, which = 26.4
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_PR_ratio, NOAEL=max(Sed_level_mg_cm2_d)) #NOAEL is 26.4
+summarize(non_adverse_PR_ratio, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 26.4
 
 #PLOT
-photosynthesisDS %>% 
-  select(Ocean, Region, Genus, species, Binary_sed_burial, Sed_level_mg_cm2_d, Binary_reduced_PR_ratio) %>% 
-  filter(Binary_sed_burial=="0") %>% #remove all studies that buried corals instead of giving them a specific dosage (in mg/cm2/day)
-  ggplot() +
+ggplot(data = photoDS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_PR_ratio)) + 
     labs(x = "Sedimentation rate (mg/cm2/d)", 
          y = "Presence/absence (1/0) of large necroses\ndue to sedimentation?") +
@@ -492,19 +337,19 @@ photosynthesisDS %>%
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_PR_ratio2 <- PR_ratio %>% 
   filter(Binary_reduced_PR_ratio=="1") %>% 
-  filter(!is.na(Sed_days)) %>% 
-  arrange(Sed_days)
+  filter(!is.na(Sed_exposure_days)) %>% 
+  arrange(Sed_exposure_days)
 
 #LOAEL
-summarize(adverse_PR_ratio2, LOAEL=min(Sed_days)) #LOAEL is 2 days
+summarize(adverse_PR_ratio2, LOAEL=min(Sed_exposure_days)) #LOAEL is 2 days
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_PR_ratio2 <- PR_ratio %>%
   filter(Binary_reduced_PR_ratio=="0") %>%
-  filter(Sed_days<=2) #less than or equal to the LOAEL, which = 2
+  filter(Sed_exposure_days<=2) #less than or equal to the LOAEL, which = 2
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_PR_ratio2, NOAEL=max(Sed_days)) #NOAEL is 2 days
+summarize(non_adverse_PR_ratio2, NOAEL=max(Sed_exposure_days)) #NOAEL is 2 days
 
 #PLOT LOAELs
 PR_ratio_plot + geom_point(data = subset(PR_ratio, Binary_reduced_PR_ratio=="1")) +
@@ -526,28 +371,26 @@ PR_ratio_plot + geom_point(data = subset(PR_ratio, Binary_reduced_PR_ratio=="1")
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_photoSS <- photo_effSS %>% 
   filter(Binary_reduced_FvFm=="1") %>%
-  arrange(Sed_level_mg_L_num)
+  arrange(Sed_level_stand_mg)
 
 #LOAEL
-summarize(adverse_photoSS, LOAEL=min(Sed_level_mg_L_num)) #LOAEL is 35.8 and is from Browne et al. (2015) with Merulina ampliata for 56 days
-loaelSS1 <- adverse_photoSS %>% summarize(min(Sed_level_mg_L_num))
+summarize(adverse_photoSS, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 35.8 and is from Browne et al. (2015) with Merulina ampliata for 56 days
+loaelSS1 <- adverse_photoSS %>% summarize(min(Sed_level_stand_mg))
 loaelSS1 <- as.numeric(loaelSS1)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_photoSS <- photo_effSS %>%
   filter(Binary_reduced_FvFm=="0") %>%
-  arrange(desc(Sed_level_mg_L_num)) %>%
-  filter(Sed_level_mg_L_num<=35.8) #less than or equal to the LOAEL, which = 35.8
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=35.8) #less than or equal to the LOAEL, which = 35.8
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_photoSS, NOAEL=max(Sed_level_mg_L_num)) #NOAEL is 35.8
+summarize(non_adverse_photoSS, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 35.8
 
 #PLOT
-photo_effSS %>% 
-  select(Ocean, Gsp, Sed_level_mg_L_num, Binary_reduced_FvFm) %>% 
-  ggplot() +
+ggplot(data = photoSS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L_num, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_FvFm)) + 
     labs(x = "Total suspended sediment (mg/L)", 
          y = "Reduced photosynthetic efficiency\ndue to suspended sediment?") +
@@ -594,28 +437,26 @@ photo_effSS_plot + geom_point(data = subset(photo_effSS, Binary_reduced_FvFm=="1
 #Setting up for LOAEL by filtering for adverse effects (binary=1)
 adverse_pr_ratioSS <- PR_ratioSS %>% 
   filter(Binary_reduced_PR_ratio=="1") %>%
-  arrange(Sed_level_mg_L_num)
+  arrange(Sed_level_stand_mg)
 
 #LOAEL
-summarize(adverse_pr_ratioSS, LOAEL=min(Sed_level_mg_L_num)) #LOAEL is 35.8 and is from Browne et al. (2015) with Merulina ampliata for 56 days
-loaelSS2 <- adverse_pr_ratioSS %>% summarize(min(Sed_level_mg_L_num))
+summarize(adverse_pr_ratioSS, LOAEL=min(Sed_level_stand_mg)) #LOAEL is 35.8 and is from Browne et al. (2015) with Merulina ampliata for 56 days
+loaelSS2 <- adverse_pr_ratioSS %>% summarize(min(Sed_level_stand_mg))
 loaelSS2 <- as.numeric(loaelSS2)
 
 #Setting up for NOAEL by filtering for non-adverse effects (binary=0), and then by any sediment level less than or equal to the LOAEL
 non_adverse_pr_ratioSS <- PR_ratioSS %>%
   filter(Binary_reduced_PR_ratio=="0") %>%
-  arrange(desc(Sed_level_mg_L_num)) %>%
-  filter(Sed_level_mg_L_num<=35.8) #less than or equal to the LOAEL, which = 35.8
+  arrange(desc(Sed_level_stand_mg)) %>%
+  filter(Sed_level_stand_mg<=35.8) #less than or equal to the LOAEL, which = 35.8
 
 #NOAEL = maximum sediment level with no adverse effect
-summarize(non_adverse_pr_ratioSS, NOAEL=max(Sed_level_mg_L_num)) #NOAEL is 35.8
+summarize(non_adverse_pr_ratioSS, NOAEL=max(Sed_level_stand_mg)) #NOAEL is 35.8
 
 #PLOT
-PR_ratioSS %>% 
-  select(Ocean, Gsp, Sed_level_mg_L_num, Binary_reduced_PR_ratio) %>% 
-  ggplot() +
+ggplot(data = photoSS) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L_num, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_PR_ratio)) + 
     labs(x = "Total suspended sediment (mg/L)", 
          y = "Reduced photosynthetic efficiency\ndue to suspended sediment?") +
@@ -664,38 +505,38 @@ PR_ratioSS_plot + geom_point(data = subset(PR_ratioSS, Binary_reduced_PR_ratio==
 ```{r, echo=FALSE, warning=FALSE}
 #Let's add a log transformation of sediment level, in case it's needed
 photo_effDS2 <- photo_eff %>% 
-  mutate(log10_conc=log10(Sed_level_mg_cm2_d)) %>% 
+  mutate(log10_conc=log10(Sed_level_stand_mg)) %>% 
   filter(Control_code=="0")
 photo_effDS2 %>% tally()
 
 #Models with fixed effect(s) only
-modDS1 <- glm(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d, 
+modDS1 <- glm(Binary_reduced_FvFm ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = photo_effDS2)
-modDS2 <- glm(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d + Sed_days, 
+modDS2 <- glm(Binary_reduced_FvFm ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = photo_effDS2)
-modDS3 <- glm(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d*Sed_days, 
+modDS3 <- glm(Binary_reduced_FvFm ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = photo_effDS2)
 
 #models with random effect for coral species or study
-modDS4 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d + (1 | Gsp), 
+modDS4 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = photo_effDS2)
-modDS5 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d + Sed_days + (1 | Gsp), 
+modDS5 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = photo_effDS2)
-modDS6 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d*Sed_days + (1 | Gsp), 
+modDS6 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = photo_effDS2)
-modDS7 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d + (1 | Ref), 
+modDS7 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = photo_effDS2)
-modDS8 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d + Sed_days + (1 | Ref), 
+modDS8 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
               family = binomial, data = photo_effDS2)
-modDS9 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d*Sed_days + (1 | Ref), 
+modDS9 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Ref), 
               family = binomial, data = photo_effDS2)
-modDS10 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref), 
+modDS10 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = photo_effDS2)
 modDS11 <- glmer(Binary_reduced_FvFm ~ 
-                Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = photo_effDS2)
 modDS12 <- glmer(Binary_reduced_FvFm ~ 
-                Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = photo_effDS2)
 
 #Model comparison and summary
@@ -730,17 +571,16 @@ VarCorr(modDS7) #SD=2.0307
 exp(sqrt(VarCorr(modDS7)$Ref[1])) #I think this means that two observations from different studies typically differ by a factor of exp(2.0307) = 7.619567
 modDS7_noSed <- glmer(Binary_reduced_FvFm ~ 1 + (1 | Ref), 
                     family = binomial, data = photo_effDS2)
-#Explained_var_Ref <- (1-VarCorr(modDS7)$Ref[1]/VarCorr(modDS7_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(modDS7)$Ref[["(Intercept)"]]
 Ref.intercepts <- fixef(modDS7)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
 for (i in 1:length(random.intercepts)) {
-  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_mg_cm2_d"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_mg_cm2_d"]*x)), 
-                    from = min(photo_effDS2$Sed_level_mg_cm2_d), to = max(photo_effDS2$Sed_level_mg_cm2_d), 
+  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_stand_mg"]*x)), 
+                    from = min(photo_effDS2$Sed_level_stand_mg), to = max(photo_effDS2$Sed_level_stand_mg), 
                     ylim = c(0, 1), 
                     ylab = "Probability of adverse effect", 
                     xlab = "Exposure concentration, mg/cm2/d")
-  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_mg_cm2_d"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_mg_cm2_d"]*x)), add = T) 
+  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDS7)["Sed_level_stand_mg"]*x)), add = T) 
 }
 
 #https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
@@ -767,26 +607,26 @@ photo_effDS3 <- cbind(photo_effDS2, pred_modDS10)
 
 photo_effDS_plot <- ggplot(data = photo_effDS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_FvFm)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
          y = "Reduced photosynthetic efficiency\ndue to sediment exposure?") +
     scale_x_log10(limits=c(0.01,1000),breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
-    geom_line(aes(x = Sed_level_mg_cm2_d, y = pred_modDS10), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_modDS10), inherit.aes=FALSE) +
     theme_bw()
 
 photo_effDS_plot
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 ```{r}
-jvalues <- with(photo_effDS2, seq(from = min(Sed_level_mg_cm2_d), to = max(Sed_level_mg_cm2_d), length.out = 100))
+jvalues <- with(photo_effDS2, seq(from = min(Sed_level_stand_mg), to = max(Sed_level_stand_mg), length.out = 100))
 
 # calculate predicted probabilities and store in a list
 pp <- lapply(jvalues, function(j) {
-    photo_effDS2$Sed_level_mg_cm2_d <- j
+    photo_effDS2$Sed_level_stand_mg <- j
     predict(modDS10, newdata = photo_effDS2, type = "response")
 })
 
@@ -795,7 +635,7 @@ plotdat <- t(sapply(pp, function(x) {
     c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
 }))
 
-# add in Sed_level_mg_cm2_d values and convert to data frame
+# add in Sed_level_stand_mg values and convert to data frame
 plotdat <- as.data.frame(cbind(plotdat, jvalues))
 
 # better names and show the first few rows
@@ -818,7 +658,7 @@ ggplot(plotdat, aes(x = Sed_conc)) +
 #by Ref
 photo_effDS_plot2 <- ggplot() +
     geom_point(data = photo_effDS2, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_FvFm,
       color=Ref)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
@@ -845,41 +685,41 @@ photo_effDS_plot2
 ```{r, echo=FALSE, warning=FALSE}
 #Let's add a log transformation of sediment level, in case it's needed
 PR_ratioDS2 <- PR_ratio %>% 
-  mutate(log10_conc=log10(Sed_level_mg_cm2_d)) %>% 
-  mutate(log10_dur=log10(Sed_days)) %>% 
+  mutate(log10_conc=log10(Sed_level_stand_mg)) %>% 
+  mutate(log10_dur=log10(Sed_exposure_days)) %>% 
   filter(Control_code=="0")
 PR_ratioDS2 %>% tally()
 PR_ratioDS2 %>% count(Ref)
 unique(PR_ratioDS2[c("Ref","Gsp")])
 
 #Models with fixed effect(s) only
-modDSb1 <- glm(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d, 
+modDSb1 <- glm(Binary_reduced_PR_ratio ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = PR_ratioDS2)
-modDSb2 <- glm(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d + Sed_days, 
+modDSb2 <- glm(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = PR_ratioDS2)
-modDSb3 <- glm(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d*Sed_days, 
+modDSb3 <- glm(Binary_reduced_PR_ratio ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = PR_ratioDS2)
 
 #models with random effect for coral species or study
-modDSb4 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d + (1 | Gsp), 
+modDSb4 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = PR_ratioDS2)
-modDSb5 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d + Sed_days + (1 | Gsp), 
+modDSb5 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = PR_ratioDS2)
-modDSb6 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d*Sed_days + (1 | Gsp), 
+modDSb6 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = PR_ratioDS2)
-modDSb7 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d + (1 | Ref), 
+modDSb7 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = PR_ratioDS2)
-modDSb8 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d + Sed_days + (1 | Ref), 
+modDSb8 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
               family = binomial, data = PR_ratioDS2)
-modDSb9 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d*Sed_days + (1 | Ref), 
+modDSb9 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Ref), 
               family = binomial, data = PR_ratioDS2)
-modDSb10 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_cm2_d + (1 | Gsp) + (1 | Ref), 
+modDSb10 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = PR_ratioDS2)
 modDSb11 <- glmer(Binary_reduced_PR_ratio ~ 
-                Sed_level_mg_cm2_d + Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = PR_ratioDS2)
 modDSb12 <- glmer(Binary_reduced_PR_ratio ~ 
-                Sed_level_mg_cm2_d*Sed_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = PR_ratioDS2)
 
 #Model comparison and summary
@@ -913,17 +753,16 @@ VarCorr(modDSb8) #SD=2.0307
 exp(sqrt(VarCorr(modDSb8)$Ref[1])) #I think this means that two observations from different studies typically differ by a factor of exp(2.0307) = 7.619567
 modDSb8_noSed <- glmer(Binary_reduced_PR_ratio ~ 1 + (1 | Ref), 
                     family = binomial, data = PR_ratioDS2)
-#Explained_var_Ref <- (1-VarCorr(modDSb8)$Ref[1]/VarCorr(modDSb8_noSed)$Ref[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(modDSb8)$Ref[["(Intercept)"]]
 Ref.intercepts <- fixef(modDSb8)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
 for (i in 1:length(random.intercepts)) {
-  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modDSb8)["Sed_level_mg_cm2_d"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDSb8)["Sed_level_mg_cm2_d"]*x)), 
-                    from = min(PR_ratioDS2$Sed_level_mg_cm2_d), to = max(PR_ratioDS2$Sed_level_mg_cm2_d), 
+  if (i == 1) curve(exp(Ref.intercepts[i] + fixef(modDSb8)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDSb8)["Sed_level_stand_mg"]*x)), 
+                    from = min(PR_ratioDS2$Sed_level_stand_mg), to = max(PR_ratioDS2$Sed_level_stand_mg), 
                     ylim = c(0, 1), 
                     ylab = "Probability of adverse effect", 
                     xlab = "Exposure concentration, mg/cm2/d")
-  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modDSb8)["Sed_level_mg_cm2_d"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDSb8)["Sed_level_mg_cm2_d"]*x)), add = T) 
+  if (i > 1) curve(exp(Ref.intercepts[i] + fixef(modDSb8)["Sed_level_stand_mg"]*x)/(1 + exp(Ref.intercepts[i] + fixef(modDSb8)["Sed_level_stand_mg"]*x)), add = T) 
 }
 
 #https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
@@ -949,28 +788,28 @@ PR_ratioDS3 <- cbind(PR_ratioDS2, pred_modDSb8)
 
 PR_ratioDS_plot <- ggplot(data = PR_ratioDS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_PR_ratio,
       color = Ref)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
          y = "Reduced P/R ratio due to sediment exposure?",
          color = "Study") +
     scale_x_continuous(limits=c(0,200)) +
-    geom_line(aes(x = Sed_level_mg_cm2_d, y = pred_modDSb8), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_modDSb8), inherit.aes=FALSE) +
     theme_bw()
 
 PR_ratioDS_plot
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 ##### By exposure concentration
 ```{r}
-jvalues <- with(PR_ratioDS2, seq(from = min(Sed_level_mg_cm2_d), to = max(Sed_level_mg_cm2_d), length.out = 100))
+jvalues <- with(PR_ratioDS2, seq(from = min(Sed_level_stand_mg), to = max(Sed_level_stand_mg), length.out = 100))
 
 # calculate predicted probabilities and store in a list
 pp <- lapply(jvalues, function(j) {
-    PR_ratioDS2$Sed_level_mg_cm2_d <- j
+    PR_ratioDS2$Sed_level_stand_mg <- j
     predict(modDSb8, newdata = PR_ratioDS2, type = "response")
 })
 
@@ -979,7 +818,7 @@ plotdat <- t(sapply(pp, function(x) {
     c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
 }))
 
-# add in Sed_level_mg_cm2_d values and convert to data frame
+# add in Sed_level_stand_mg values and convert to data frame
 plotdat <- as.data.frame(cbind(plotdat, jvalues))
 
 # better names and show the first few rows
@@ -1002,7 +841,7 @@ ggplot(plotdat, aes(x = Sed_conc)) +
 #by Ref
 PR_ratioDS_plot2 <- ggplot() +
     geom_point(data = PR_ratioDS2, mapping = aes(
-      x = Sed_level_mg_cm2_d, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_PR_ratio,
       color = Ref)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
@@ -1027,11 +866,11 @@ PR_ratioDS_plot2
   
 ##### By exposure duration
 ```{r}
-jvalues <- with(PR_ratioDS2, seq(from = min(Sed_days), to = max(Sed_days), length.out = 100))
+jvalues <- with(PR_ratioDS2, seq(from = min(Sed_exposure_days), to = max(Sed_exposure_days), length.out = 100))
 
 # calculate predicted probabilities and store in a list
 pp <- lapply(jvalues, function(j) {
-    PR_ratioDS2$Sed_days <- j
+    PR_ratioDS2$Sed_exposure_days <- j
     predict(modDSb8, newdata = PR_ratioDS2, type = "response")
 })
 
@@ -1040,7 +879,7 @@ plotdat <- t(sapply(pp, function(x) {
     c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
 }))
 
-# add in Sed_days values and convert to data frame
+# add in Sed_exposure_days values and convert to data frame
 plotdat <- as.data.frame(cbind(plotdat, jvalues))
 
 # better names and show the first few rows
@@ -1063,7 +902,7 @@ ggplot(plotdat, aes(x = Sed_dur)) +
 #by Ref
 PR_ratioDS_plot2 <- ggplot() +
     geom_point(data = PR_ratioDS2, mapping = aes(
-      x = Sed_days, 
+      x = Sed_exposure_days, 
       y = Binary_reduced_PR_ratio,
       color = Ref)) +
     labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"), 
@@ -1084,75 +923,75 @@ PR_ratioDS_plot2 <- ggplot() +
 PR_ratioDS_plot2
 ```
   
-
+  
 ## SUSPENDED SEDIMENT
 ### Photosynthetic Efficiency
 ```{r, echo=FALSE, warning=FALSE}
 #Let's add a log transformation of sediment level, in case it's needed
 photo_effSS2 <- photo_effSS %>% 
   filter(Control_code=="0") %>% 
-  mutate(log10_conc=log10(Sed_level_mg_L_num)) %>% 
+  mutate(log10_conc=log10(Sed_level_stand_mg)) %>% 
   mutate(log10_dur=log10(Sed_exposure_days))
 photo_effSS2 %>% tally()
 
 #Models with fixed effect(s) only
-modSS1 <- glm(Binary_reduced_FvFm ~ Sed_level_mg_L_num, 
+modSS1 <- glm(Binary_reduced_FvFm ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = photo_effSS2)
-modSS2 <- glm(Binary_reduced_FvFm ~ Sed_level_mg_L_num + Sed_exposure_days, 
+modSS2 <- glm(Binary_reduced_FvFm ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = photo_effSS2)
-modSS3 <- glm(Binary_reduced_FvFm ~ Sed_level_mg_L_num*Sed_exposure_days, 
+modSS3 <- glm(Binary_reduced_FvFm ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = photo_effSS2)
 
 #models with random effect for coral species or study
-modSS4 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_L_num + (1 | Gsp), 
+modSS4 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = photo_effSS2)
 modSS5 <- glmer(Binary_reduced_FvFm ~ 
-                  Sed_level_mg_L_num + Sed_exposure_days + (1 | Gsp), 
+                  Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = photo_effSS2)
 modSS6 <- glmer(Binary_reduced_FvFm ~ 
-                  Sed_level_mg_L_num*Sed_exposure_days + (1 | Gsp),
+                  Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp),
                 family = binomial, data = photo_effSS2)
-modSS7 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_L_num + (1 | Ref), 
+modSS7 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = photo_effSS2)
 modSS8 <- glmer(Binary_reduced_FvFm ~ 
-                  Sed_level_mg_L_num + Sed_exposure_days + (1 | Ref), 
+                  Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
                 family = binomial, data = photo_effSS2)
 modSS9 <- glmer(Binary_reduced_FvFm ~ 
-                  Sed_level_mg_L_num*Sed_exposure_days + (1 | Ref),
+                  Sed_level_stand_mg*Sed_exposure_days + (1 | Ref),
                 family = binomial, data = photo_effSS2)
-modSS10 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_L_num + (1 | Gsp) + (1 | Ref), 
+modSS10 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = photo_effSS2)
 modSS11 <- glmer(Binary_reduced_FvFm ~ 
-                Sed_level_mg_L_num + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = photo_effSS2)
 modSS12 <- glmer(Binary_reduced_FvFm ~ 
-                Sed_level_mg_L_num*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = photo_effSS2)
-modSS13 <- glmer(Binary_reduced_FvFm ~ Sed_level_mg_L_num + (1 | Ref_name/Ref), 
+modSS13 <- glmer(Binary_reduced_FvFm ~ Sed_level_stand_mg + (1 | Ref_name/Ref), 
               family = binomial, data = photo_effSS2)
 modSS14 <- glmer(Binary_reduced_FvFm ~ 
-                 Sed_level_mg_L_num + Sed_exposure_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = photo_effSS2)
 modSS15 <- glmer(Binary_reduced_FvFm ~ 
-                 Sed_level_mg_L_num*Sed_exposure_days + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Ref_name/Ref), 
               family = binomial, data = photo_effSS2)
 modSS16 <- glmer(Binary_reduced_FvFm ~ 
-                 Sed_level_mg_L_num + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = photo_effSS2)
 modSS17 <- glmer(Binary_reduced_FvFm ~ 
-                 Sed_level_mg_L_num + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = photo_effSS2)
 modSS18 <- glmer(Binary_reduced_FvFm ~ 
-                 Sed_level_mg_L_num*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name), 
               family = binomial, data = photo_effSS2)
 modSS19 <- glmer(Binary_reduced_FvFm ~ 
-                 Sed_level_mg_L_num + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = photo_effSS2)
 modSS20 <- glmer(Binary_reduced_FvFm ~ 
-                 Sed_level_mg_L_num + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = photo_effSS2)
 modSS21 <- glmer(Binary_reduced_FvFm ~ 
-                 Sed_level_mg_L_num*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
+                 Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref_name/Ref), 
               family = binomial, data = photo_effSS2)
 
 #model comparison and summary
@@ -1186,17 +1025,16 @@ VarCorr(modSS5) #SD=2.0307
 exp(sqrt(VarCorr(modSS5)$Gsp[1])) #I think this means that two observations from different studies typically differ by a factor of exp(2.0307) = 7.619567
 modSS5_noSed <- glmer(Binary_reduced_FvFm ~ 1 + (1 | Gsp), 
                     family = binomial, data = photo_effSS2)
-#Explained_var_Gsp <- (1-VarCorr(modSS5)$Gsp[1]/VarCorr(modSS5_noSed)$Gsp[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(modSS5)$Gsp[["(Intercept)"]]
 Gsp.intercepts <- fixef(modSS5)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
 for (i in 1:length(random.intercepts)) {
-  if (i == 1) curve(exp(Gsp.intercepts[i] + fixef(modSS5)["Sed_level_mg_L_num"]*x)/(1 + exp(Gsp.intercepts[i] + fixef(modSS5)["Sed_level_mg_L_num"]*x)), 
-                    from = min(photo_effSS2$Sed_level_mg_L_num), to = max(photo_effSS2$Sed_level_mg_L_num), 
+  if (i == 1) curve(exp(Gsp.intercepts[i] + fixef(modSS5)["Sed_level_stand_mg"]*x)/(1 + exp(Gsp.intercepts[i] + fixef(modSS5)["Sed_level_stand_mg"]*x)), 
+                    from = min(photo_effSS2$Sed_level_stand_mg), to = max(photo_effSS2$Sed_level_stand_mg), 
                     ylim = c(0, 1), 
                     ylab = "Probability of adverse effect", 
                     xlab = "Exposure concentration, mg/cm2/d")
-  if (i > 1) curve(exp(Gsp.intercepts[i] + fixef(modSS5)["Sed_level_mg_L_num"]*x)/(1 + exp(Gsp.intercepts[i] + fixef(modSS5)["Sed_level_mg_L_num"]*x)), add = T) 
+  if (i > 1) curve(exp(Gsp.intercepts[i] + fixef(modSS5)["Sed_level_stand_mg"]*x)/(1 + exp(Gsp.intercepts[i] + fixef(modSS5)["Sed_level_stand_mg"]*x)), add = T) 
 }
 
 #https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
@@ -1223,7 +1061,7 @@ photo_effSS3 <- cbind(photo_effSS2, pred_modSS5)
 
 photo_effSS_plot <- ggplot(data = photo_effSS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L_num, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_FvFm,
       color = Ref)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
@@ -1231,21 +1069,21 @@ photo_effSS_plot <- ggplot(data = photo_effSS3) +
          color = "Study") +
     scale_x_log10(limits=c(1,250),breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
-    geom_line(aes(x = Sed_level_mg_L_num, y = pred_modSS5), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_modSS5), inherit.aes=FALSE) +
     theme_bw()
 
 photo_effSS_plot
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 ##### By sediment exposure concentration
 ```{r}
-jvalues <- with(photo_effSS2, seq(from = min(Sed_level_mg_L_num), to = max(Sed_level_mg_L_num), length.out = 100))
+jvalues <- with(photo_effSS2, seq(from = min(Sed_level_stand_mg), to = max(Sed_level_stand_mg), length.out = 100))
 
 # calculate predicted probabilities and store in a list
 pp <- lapply(jvalues, function(j) {
-    photo_effSS2$Sed_level_mg_L_num <- j
+    photo_effSS2$Sed_level_stand_mg <- j
     predict(modSS5, newdata = photo_effSS2, type = "response")
 })
 
@@ -1254,7 +1092,7 @@ plotdat <- t(sapply(pp, function(x) {
     c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
 }))
 
-# add in Sed_level_mg_L_num values and convert to data frame
+# add in Sed_level_stand_mg values and convert to data frame
 plotdat <- as.data.frame(cbind(plotdat, jvalues))
 
 # better names and show the first few rows
@@ -1277,14 +1115,14 @@ ggplot(plotdat, aes(x = Sed_conc)) +
 #by Ref
 photo_effSS_plot2 <- ggplot() +
     geom_point(data = photo_effSS2, mapping = aes(
-      x = Sed_level_mg_L_num, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_FvFm,
       color = Ref)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Predicted probability of reduced photosynthetic\nefficiency due to sediment exposure",
          color = "Binary Data\nby Study",
          linetype = "Predicted\nProbability") +
-    scale_x_log10(limits=c(1,max(photo_effSS2$Sed_level_mg_L_num)), 
+    scale_x_log10(limits=c(1,max(photo_effSS2$Sed_level_stand_mg)), 
                   breaks=c(0.01,0.1,1,10,100,1000,loaelSS1),
                   label=c("0.01","0.1","1","10","100","1000",round(loaelSS1,digits = 1))) +
     geom_ribbon(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
@@ -1368,42 +1206,42 @@ photo_effSS_plot3
 #Let's add a log transformation of sediment level, in case it's needed
 PR_ratioSS2 <- PR_ratioSS %>% 
   filter(Control_code=="0") %>% 
-  mutate(log10_conc=log10(Sed_level_mg_L_num)) %>% 
+  mutate(log10_conc=log10(Sed_level_stand_mg)) %>% 
   mutate(log10_dur=log10(Sed_exposure_days))
 PR_ratioSS2 %>% tally()
 
 #Models with fixed effect(s) only
-modSSb1 <- glm(Binary_reduced_PR_ratio ~ Sed_level_mg_L_num, 
+modSSb1 <- glm(Binary_reduced_PR_ratio ~ Sed_level_stand_mg, 
             family = binomial(link = "logit"), data = PR_ratioSS2)
-modSSb2 <- glm(Binary_reduced_PR_ratio ~ Sed_level_mg_L_num + Sed_exposure_days, 
+modSSb2 <- glm(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + Sed_exposure_days, 
             family = binomial(link = "logit"), data = PR_ratioSS2)
-modSSb3 <- glm(Binary_reduced_PR_ratio ~ Sed_level_mg_L_num*Sed_exposure_days, 
+modSSb3 <- glm(Binary_reduced_PR_ratio ~ Sed_level_stand_mg*Sed_exposure_days, 
             family = binomial(link = "logit"), data = PR_ratioSS2)
 
 #models with random effect for coral species or study
-modSSb4 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_L_num + (1 | Gsp), 
+modSSb4 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = PR_ratioSS2)
 modSSb5 <- glmer(Binary_reduced_PR_ratio ~ 
-                  Sed_level_mg_L_num + Sed_exposure_days + (1 | Gsp), 
+                  Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = PR_ratioSS2)
 modSSb6 <- glmer(Binary_reduced_PR_ratio ~ 
-                  Sed_level_mg_L_num*Sed_exposure_days + (1 | Gsp),
+                  Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp),
                 family = binomial, data = PR_ratioSS2)
-modSSb7 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_L_num + (1 | Ref), 
+modSSb7 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = PR_ratioSS2)
 modSSb8 <- glmer(Binary_reduced_PR_ratio ~ 
-                  Sed_level_mg_L_num + Sed_exposure_days + (1 | Ref), 
+                  Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
                 family = binomial, data = PR_ratioSS2)
 modSSb9 <- glmer(Binary_reduced_PR_ratio ~ 
-                  Sed_level_mg_L_num*Sed_exposure_days + (1 | Ref),
+                  Sed_level_stand_mg*Sed_exposure_days + (1 | Ref),
                 family = binomial, data = PR_ratioSS2)
-modSSb10 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_mg_L_num + (1 | Gsp) + (1 | Ref), 
+modSSb10 <- glmer(Binary_reduced_PR_ratio ~ Sed_level_stand_mg + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = PR_ratioSS2)
 modSSb11 <- glmer(Binary_reduced_PR_ratio ~ 
-                Sed_level_mg_L_num + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = PR_ratioSS2)
 modSSb12 <- glmer(Binary_reduced_PR_ratio ~ 
-                Sed_level_mg_L_num*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
+                Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp) + (1 | Ref), 
               family = binomial, data = PR_ratioSS2)
 
 #model comparison and summary
@@ -1438,17 +1276,16 @@ VarCorr(modSSb4) #SD=2.0307
 exp(sqrt(VarCorr(modSSb4)$Gsp[1])) #I think this means that two observations from different studies typically differ by a factor of exp(2.0307) = 7.619567
 modSSb4_noSed <- glmer(Binary_reduced_PR_ratio ~ 1 + (1 | Gsp), 
                     family = binomial, data = PR_ratioSS2)
-#Explained_var_Gsp <- (1-VarCorr(modSSb4)$Gsp[1]/VarCorr(modSSb4_noSed)$Gsp[1]) #not returning a proportion of variance explained, so not sure how to interpret.
 random.intercepts <- ranef(modSSb4)$Gsp[["(Intercept)"]]
 Gsp.intercepts <- fixef(modSSb4)[1] + random.intercepts 
 #plot with probability of binary response on y-axis, each line representing a study:
 for (i in 1:length(random.intercepts)) {
-  if (i == 1) curve(exp(Gsp.intercepts[i] + fixef(modSSb4)["Sed_level_mg_L_num"]*x)/(1 + exp(Gsp.intercepts[i] + fixef(modSSb4)["Sed_level_mg_L_num"]*x)), 
-                    from = min(PR_ratioSS2$Sed_level_mg_L_num), to = max(PR_ratioSS2$Sed_level_mg_L_num), 
+  if (i == 1) curve(exp(Gsp.intercepts[i] + fixef(modSSb4)["Sed_level_stand_mg"]*x)/(1 + exp(Gsp.intercepts[i] + fixef(modSSb4)["Sed_level_stand_mg"]*x)), 
+                    from = min(PR_ratioSS2$Sed_level_stand_mg), to = max(PR_ratioSS2$Sed_level_stand_mg), 
                     ylim = c(0, 1), 
                     ylab = "Probability of adverse effect", 
                     xlab = "Exposure concentration, mg/cm2/d")
-  if (i > 1) curve(exp(Gsp.intercepts[i] + fixef(modSSb4)["Sed_level_mg_L_num"]*x)/(1 + exp(Gsp.intercepts[i] + fixef(modSSb4)["Sed_level_mg_L_num"]*x)), add = T) 
+  if (i > 1) curve(exp(Gsp.intercepts[i] + fixef(modSSb4)["Sed_level_stand_mg"]*x)/(1 + exp(Gsp.intercepts[i] + fixef(modSSb4)["Sed_level_stand_mg"]*x)), add = T) 
 }
 
 #https://stats.stackexchange.com/questions/8318/interpretation-of-log-transformed-predictors-in-logistic-regression
@@ -1475,7 +1312,7 @@ PR_ratioSS3 <- cbind(PR_ratioSS2, pred_modSSb4)
 
 PR_ratioSS_plot <- ggplot(data = PR_ratioSS3) +
     geom_point(mapping = aes(
-      x = Sed_level_mg_L_num, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_PR_ratio,
       color = Ref)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
@@ -1483,21 +1320,21 @@ PR_ratioSS_plot <- ggplot(data = PR_ratioSS3) +
          color = "Study") +
     scale_x_log10(limits=c(10,1000),breaks=c(0.01,0.1,1,10,100,1000),
                   label=c("0.01","0.1","1","10","100","1000")) +
-    geom_line(aes(x = Sed_level_mg_L_num, y = pred_modSSb4), inherit.aes=FALSE) +
+    geom_line(aes(x = Sed_level_stand_mg, y = pred_modSSb4), inherit.aes=FALSE) +
     theme_bw()
 
 PR_ratioSS_plot
 ```
 
-That plot is a bit...confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+That plot is confusing to interpret. Let's see if I can plot the average marginal probability, i.e., the average change in probability of the outcome across the range of the predictor of interest. This is described in some detail at the following, useful website: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
   
 ##### By sediment exposure concentration
 ```{r}
-jvalues <- with(PR_ratioSS2, seq(from = min(Sed_level_mg_L_num), to = max(Sed_level_mg_L_num), length.out = 100))
+jvalues <- with(PR_ratioSS2, seq(from = min(Sed_level_stand_mg), to = max(Sed_level_stand_mg), length.out = 100))
 
 # calculate predicted probabilities and store in a list
 pp <- lapply(jvalues, function(j) {
-    PR_ratioSS2$Sed_level_mg_L_num <- j
+    PR_ratioSS2$Sed_level_stand_mg <- j
     predict(modSSb4, newdata = PR_ratioSS2, type = "response")
 })
 
@@ -1506,7 +1343,7 @@ plotdat <- t(sapply(pp, function(x) {
     c(M = mean(x), med = median(x), quantile(x, c(0.25, 0.75)))
 }))
 
-# add in Sed_level_mg_L_num values and convert to data frame
+# add in Sed_level_stand_mg values and convert to data frame
 plotdat <- as.data.frame(cbind(plotdat, jvalues))
 
 # better names and show the first few rows
@@ -1529,14 +1366,14 @@ ggplot(plotdat, aes(x = Sed_conc)) +
 #by Ref
 PR_ratioSS_plot2 <- ggplot() +
     geom_point(data = PR_ratioSS2, mapping = aes(
-      x = Sed_level_mg_L_num, 
+      x = Sed_level_stand_mg, 
       y = Binary_reduced_PR_ratio,
       color = Ref)) +
     labs(x = "Sediment exposure concentration (mg/L)", 
          y = "Predicted probability of reduced\nP/R ratio to sediment exposure",
          color = "Binary Data\nby Study",
          linetype = "Predicted\nProbability") +
-    scale_x_log10(limits=c(10,max(PR_ratioSS2$Sed_level_mg_L_num)), 
+    scale_x_log10(limits=c(10,max(PR_ratioSS2$Sed_level_stand_mg)), 
                   breaks=c(0.01,0.1,1,10,100,1000,loaelSS2),
                   label=c("0.01","0.1","1","10","100","1000",round(loaelSS2,digits = 1))) +
     geom_ribbon(data = plotdat, aes(x = Sed_conc, y = PredictedProbability, 
