@@ -11,15 +11,8 @@ library(tidyverse)
 library(mixmeta)
 library(dosresmeta)
 library(splines)
-library(effects)
-library(lattice)
-library(MuMIn)
-effectsize <- read.csv("data/effectsize_ALL.csv", header=T)
 
-#keyboard shortcuts to remember: 
-#command-option-I inserts new code chunk
-#command-shift-M inserts pipeline symbols
-#command-enter runs line of code where cursor is (or highlighted portion)
+effectsize <- read.csv("data/effectsize_ALL.csv", header=T)
 ```
   
 ```{r, echo=FALSE, warning=FALSE}
@@ -105,7 +98,7 @@ ES_SS_fertilization_b2 <- subset(ES_SS_fertilization_b, Control=="0")
 ## A. Suspended Sediment, Dataset WITH Outlier  
   
 ### 1. Plots  
-I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to cumulative exposure. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
+I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to exposure concentration. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
 
 ```{r, echo=FALSE, warning=FALSE}
 #EXPOSURE CONCENTRATION vs. effect size, by study
@@ -369,12 +362,12 @@ qqnorm(resid_d)
 qqline(resid_d)
 
 par(op)
-
-# Patterns:
-# 1.  There could be non-linearities that need to be accounted for.
-# 2.  Very strong outlier in negative residual land!
-# 3.  First let's try a log transformation of sediment exposure before adding non-linear models.
 ```
+  
+Patterns:
+1.  There could be non-linearities that need to be accounted for.
+2.  Very strong outlier in negative residual land!
+3.  First let's try a log transformation of sediment exposure before adding non-linear models.
   
 Now let's check out a log, base 10 transformation of sediment exposure to see if it improves the residuals of the models.
 
@@ -531,12 +524,12 @@ qqnorm(resid_logd2)
 qqline(resid_logd2)
 
 par(op)
-
-# Patterns:
-# 1.  Residuals for all models are very similar.
-# 2.  Looking MUCH better, with less extreme residuals, with exception of one very strong outlier in negative residual land!
-# 3.  Let's check out non-linear options to see if it helps with outlier. Otherwise, will need to analyze with and without this data-point.
 ```
+  
+Patterns:
+1.  Residuals for all models are very similar.
+2.  Looking MUCH better, with less extreme residuals, with exception of one very strong outlier in negative residual land!
+3.  Let's check out non-linear options to see if it helps with outlier. Otherwise, will need to analyze with and without this data-point.
   
 These are much improved from the non-logged models! There is still one outlier, so I will need to analyze the data with and without it. Out of curiosity, I will also fit non-linear models to the data, to see if there is any improvement...
   
@@ -587,19 +580,18 @@ qqnorm(new_resid_d2)
 qqline(new_resid_d2)
 
 par(op)
-
-
-# Patterns:
-# 1.  No obvious changes/improvements in residuals from linear versions.
-# 2.  Still strong outlier in negative residual land! Let's check out models without outlier.
 ```
+  
+Patterns:
+1.  No obvious changes/improvements in residuals from linear versions.
+2.  Still strong outlier in negative residual land! Let's check out models without outlier.
   
 The residuals for the non-linear, logarithmic models are very similar to the analogous linear, logarithmic models. I will defer to the linear models because they are simpler.
   
   
 ### 4. Best-Fit Model Summary
   
-#### ii. Exposure concentration is PREDICTOR
+#### i. Exposure concentration is PREDICTOR
 Now I will predict the effect size along the exposure range and plot with confidence intervals.  
 
 ```{r, echo=FALSE, warning=FALSE}
@@ -653,7 +645,7 @@ ggplot(ES_SS_fertilization2_CI4,
 ## B. Suspended Sediment, WITHOUT outlier  
   
 ### 1. Plots  
-I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to cumulative exposure. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
+I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to exposureconcentration. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
 
 ```{r, echo=FALSE, warning=FALSE}
 #EXPOSURE CONCENTRATION vs. effect size, by study
@@ -691,7 +683,7 @@ ggplot(ES_SS_fertilization_b2,
                 label=c("1","10","100","1000"))
 
 
-#CUMULATIVE EXPOSURE vs. effect size, by SEDIMENT TYPE
+#by SEDIMENT TYPE
 #Using previously calculated Hedges' d and variance of d
 ggplot(ES_SS_fertilization_b2, 
        aes(x = Sed_level_standardized,
@@ -728,7 +720,7 @@ ggplot(ES_SS_fertilization_b2,
   scale_x_log10(limits = c(1,1000), breaks=c(1,10,100,1000), 
                 label=c("1","10","100","1000"))
 
-#CUMULATIVE EXPOSURE vs. effect size, by PHYLOGENY
+#by PHYLOGENY
 #Using previously calculated Hedges' d and variance of d
 ggplot(ES_SS_fertilization_b2, 
        aes(x = Sed_level_standardized,
@@ -746,7 +738,7 @@ ggplot(ES_SS_fertilization_b2,
   scale_x_log10(limits = c(1,1000), breaks=c(1,10,100,1000), 
                 label=c("1","10","100","1000"))
 
-#CUMULATIVE EXPOSURE vs. effect size, by OCEAN and REGION
+#by OCEAN and REGION
 #Using previously calculated Hedges' d and variance of d
 ggplot(ES_SS_fertilization_b2, 
        aes(x = Sed_level_standardized,
@@ -918,12 +910,11 @@ qqnorm(resid_d_b)
 qqline(resid_d_b)
 
 par(op)
-
-
-# Patterns:
-# 1.  There could be non-linearities that need to be accounted for?
-# 2.  First let's check out a log-transformation of sediment exposure to see if that improves residuals...
 ```
+  
+Patterns:
+1.  There could be non-linearities that need to be accounted for?
+2.  First let's check out a log-transformation of sediment exposure to see if that improves residuals...
   
 Now let's try log transformation of the sediment predictor. I will use the base 10 logarithmic scale because it seems suitable for the spread of sediment exposure in all cases.
 
