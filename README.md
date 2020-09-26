@@ -4,7 +4,8 @@ This repository includes data and analysis scripts to accompany:
   
 ### Author of analysis and code: Lillian J. Tuttle (tuttlel@hawaii.edu)
 ### Publication: Report to NOAA Pacific Islands Regional Office
-### Date: September 28, 2020
+### Date of Publication: September 28, 2020
+### Associated Grant: NOAA NA18NMF4540325 “*Developing stressor thresholds for reef-building coral species in the Pacific Islands Region*” to PI Megan J. Donahue (donahuem@hawaii.edu)
   
 -----
   
