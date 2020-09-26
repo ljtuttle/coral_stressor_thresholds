@@ -1,7 +1,7 @@
 ---
 title: "Effects of sediment on the growth of adult corals"
 author: "Lillian J. Tuttle"
-date: "7/17/2020"
+date: "9/25/2020"
 output: html_document
 ---
 
@@ -12,13 +12,7 @@ library(mixmeta)
 library(dosresmeta)
 library(splines)
 
-#will want to getwd() and setwd(), as appropriate
-effectsize <- read.csv("/Volumes/GoogleDrive/My Drive/iScience/Code/thresholds/sedimentation/effectsize2.csv", header=T)
-
-#keyboard shortcuts to remember: 
-#command-option-I inserts new code chunk
-#command-shift-M inserts pipeline symbols
-#command-enter runs line of code where cursor is (or highlighted portion)
+effectsize <- read.csv("data/effectsize_ALL.csv", header=T)
 ```
   
 ```{r, echo=FALSE, warning=FALSE}
@@ -52,11 +46,11 @@ ES_SS2 <- effectsize2 %>% filter(DS_SS=="SS")
 
 #Now separate into independent dataset for each coral response for DEPOSITED SEDIMENT
 ES_DS_growth <- ES_DS %>% filter(Response == "growth")
-ES_DS_growth %>% tally()
-ES_DS_growth %>% count(Ref)
-ES_DS_growth %>% count(Ref_name)
-ES_DS_growth %>% count(Gsp)
-ES_DS_growth %>% count(Updated_Genus)
+#ES_DS_growth %>% tally()
+#ES_DS_growth %>% count(Ref)
+#ES_DS_growth %>% count(Ref_name)
+#ES_DS_growth %>% count(Gsp)
+#ES_DS_growth %>% count(Updated_Genus)
 ``` 
   
 These datasets contain information from multiple articles (**Ref_name**) and studies/experiments (**Ref**) within those articles about the effects of DEPOSITED sediment on the **growth rate** of adult corals. I would like to explore the dose-response relationship between sediment 'dose' and the effect size, estimated here as the standardized mean difference between treatment and control, in terms of Hedges' *d*:
@@ -82,7 +76,7 @@ ES_DS_growth2 <- subset(ES_DS_growth, Control=="0")
 
 #Looking at data to make sure controls were removed
 #ES_DS_growth2
-ES_DS_growth2 %>% tally()
+#ES_DS_growth2 %>% tally()
 ``` 
   
 # I. Growth Rate  
@@ -90,43 +84,9 @@ ES_DS_growth2 %>% tally()
 ## A. Deposited Sediment  
   
 ### 1. Plots  
-I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to cumulative exposure. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
+I calculated the standardized mean difference in terms of Hedges' *d* and plot it here with respect to exposure concentration. I did this first for a Hedges' *d* that I calculated before importing the data to R and again for a Hedges' *d* that is calculated by the dosresmeta::covar.smd function.
 
 ```{r, echo=FALSE, warning=FALSE}
-#CUMULATIVE EXPOSURE vs. effect size, by study
-#Using previously calculated Hedges' d and variance of d
-ggplot(ES_DS_growth2, 
-       aes(x = Sed_exposure_mg_cm2,
-           y = Hedges_d,
-           color = Ref,
-           ymin = Hedges_d-Var_d,
-           ymax = Hedges_d+Var_d)) + 
-  geom_pointrange() +
-  ggtitle("Growth rate") +
-  labs(x = "Sediment cumulative exposure (mg/cm2)",
-       y = "Effect size (Hedges' d +/- s.d., manual calculation)",
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  theme_classic() +
-  scale_x_log10(limits = c(10,40000), breaks=c(10,100,1000,10000), 
-                label=c("10","100","1000","10000"))
-#Using dosresmeta's calculation of Hedges' d and variance of d
-ggplot(ES_DS_growth2, 
-       aes(x = Sed_exposure_mg_cm2,
-           y = smd,
-           color = Ref,
-           ymin = smd-vmd,
-           ymax = smd+vmd)) + 
-  geom_pointrange() +
-  ggtitle("Growth rate") +
-  labs(x = "Sediment cumulative exposure (mg/cm2)",
-       y = "Effect size (Hedges' d +/- s.d., dosresmeta calculation)",
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  theme_classic() +
-  scale_x_log10(limits = c(10,40000), breaks=c(10,100,1000,10000), 
-                label=c("10","100","1000","10000"))
-
 #EXPOSURE CONCENTRATION vs. effect size, by study
 #Using previously calculated Hedges' d and variance of d
 ggplot(ES_DS_growth2, 
@@ -158,7 +118,7 @@ ggplot(ES_DS_growth2,
   theme_classic() 
 
 
-#EXPOSURE CONCENTRATION vs. effect size, by SEDIMENT TYPE
+#by SEDIMENT TYPE
 #Using previously calculated Hedges' d and variance of d
 ggplot(ES_DS_growth2, 
        aes(x = Sed_level_standardized,
@@ -191,7 +151,7 @@ ggplot(ES_DS_growth2,
   geom_abline(intercept=0, slope=0) +
   theme_classic()
 
-#EXPOSURE CONCENTRATION vs. effect size, by PHYLOGENY
+#by PHYLOGENY
 #Using previously calculated Hedges' d and variance of d
 ggplot(ES_DS_growth2, 
        aes(x = Sed_level_standardized,
@@ -207,7 +167,7 @@ ggplot(ES_DS_growth2,
   geom_abline(intercept=0, slope=0) +
   theme_classic()
 
-#EXPOSURE CONCENTRATION vs. effect size, by OCEAN and REGION
+#by OCEAN and REGION
 #Using previously calculated Hedges' d and variance of d
 ggplot(ES_DS_growth2, 
        aes(x = Sed_level_standardized,
@@ -235,35 +195,15 @@ The following set of functions model fixed and random (nested) effects WITHOUT a
 #?mixmeta
 
 # Organizational Note: 
-#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
-#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
-#All models with 'a' or 'c' at the end of its name have manually calculated Hedges' d as its response.
-#All models with 'b' or 'd' at the end of its name have covar.smd calculated Hedges' d as its response.
+#All models have exposure concentration as its predictor. 
+#All models with 'd' at the end of its name have covar.smd calculated Hedges' d as its response.
 
 # LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_DS_growth_1a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2, S = Var_d,
-                       random =  ~ Sed_exposure_mg_cm2 | Comparison,
-                       data = ES_DS_growth2, method = "ml")
-mod_DS_growth_1b <- mixmeta(smd ~ Sed_exposure_mg_cm2, S = vmd,
-                      random =  ~ Sed_exposure_mg_cm2 | Comparison,
-                      data = ES_DS_growth2, method = "ml")
-mod_DS_growth_1c <- mixmeta(Hedges_d ~ Sed_level_standardized, S = Var_d,
-                       random =  ~ Sed_level_standardized | Comparison,
-                       data = ES_DS_growth2, method = "ml")
 mod_DS_growth_1d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                       random =  ~ Sed_level_standardized | Comparison,
                       data = ES_DS_growth2, method = "ml")
 
 # LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-mod_DS_growth_2a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2, S = Var_d,
-                       random =  ~ Sed_exposure_mg_cm2 | Ref/Comparison,
-                       data = ES_DS_growth2, method = "ml")
-mod_DS_growth_2b <- mixmeta(smd ~ Sed_exposure_mg_cm2, S = vmd,
-                      random =  ~ Sed_exposure_mg_cm2 | Ref/Comparison,
-                      data = ES_DS_growth2, method = "ml")
-mod_DS_growth_2c <- mixmeta(Hedges_d ~ Sed_level_standardized, S = Var_d,
-                       random =  ~ Sed_level_standardized | Ref/Comparison,
-                       data = ES_DS_growth2, method = "ml")
 mod_DS_growth_2d <- mixmeta(smd ~ Sed_level_standardized, S = vmd,
                       random =  ~ Sed_level_standardized | Ref/Comparison,
                       data = ES_DS_growth2, method = "ml")
@@ -283,19 +223,6 @@ newlist_GRO <- list(NA)
 for (i in seq(1,length(covar_DS_growth))) {
 newlist_GRO[i] <- list(covar_DS_growth[[i]]$S)
 }
-#Models with the Hedges' d I calculated (5a) and the one calculated by the package (5b)
-mod_DS_growth_5a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2,
-                       random = ~ Sed_exposure_mg_cm2 | Comparison,
-                       data=ES_DS_growth2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_GRO))
-mod_DS_growth_5b <- mixmeta(smd ~ Sed_exposure_mg_cm2,
-                       random = ~ Sed_exposure_mg_cm2 | Comparison,
-                       data=ES_DS_growth2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_GRO))
-mod_DS_growth_5c <- mixmeta(Hedges_d ~ Sed_level_standardized,
-                       random = ~ Sed_level_standardized | Comparison,
-                       data=ES_DS_growth2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_GRO))
 mod_DS_growth_5d <- mixmeta(smd ~ Sed_level_standardized,
                        random = ~ Sed_level_standardized | Comparison,
                        data=ES_DS_growth2, method="ml", #using dataset without controls
@@ -321,19 +248,6 @@ for (i in seq(1,length(unique(reflista$Ref))))  {
   templist_GRO2 <- list(NA)
 }
 #Error in getSlist(S, nay, groups, m, k, control$addSlist, control$checkPD) : wrong dimensions in 'addSlist'. See help(mixmetaControl)
-#Models with the Hedges' d I calculated (6a) and the one calculated by the package (6b)
-#mod_DS_growth_6a <- mixmeta(Hedges_d ~ Sed_exposure_mg_cm2,
-#                       random = ~ Sed_exposure_mg_cm2 | Ref/Comparison,
-#                       data=ES_DS_growth2, method="ml", #using dataset without controls
-#                       control=list(addSlist=newlist_GRO2))
-#mod_DS_growth_6b <- mixmeta(smd ~ Sed_exposure_mg_cm2,
-#                       random = ~ Sed_exposure_mg_cm2 | Ref/Comparison,
-#                       data=ES_DS_growth2, method="ml", #using dataset without controls
-#                       control=list(addSlist=newlist_GRO2))
-#mod_DS_growth_6c <- mixmeta(Hedges_d ~ Sed_level_standardized,
-#                       random = ~ Sed_level_standardized | Ref/Comparison,
-#                       data=ES_DS_growth2, method="ml", #using dataset without controls
-#                       control=list(addSlist=newlist_GRO2))
 #mod_DS_growth_6d <- mixmeta(smd ~ Sed_level_standardized,
 #                       random = ~ Sed_level_standardized | Ref/Comparison,
 #                       data=ES_DS_growth2, method="ml", #using dataset without controls
@@ -344,15 +258,6 @@ And now to compare relative fit of linear models...
 
 ```{r, echo=FALSE, warning=FALSE}
 # Model Comparisons
-AIC(mod_DS_growth_1a, mod_DS_growth_2a, mod_DS_growth_5a) 
-#of these, model 5a has lowest AIC (but 1a within 2 AIC)
-
-AIC(mod_DS_growth_1b, mod_DS_growth_2b, mod_DS_growth_5b) 
-#of these, model 5b has lowest AIC
-
-AIC(mod_DS_growth_1c, mod_DS_growth_2c, mod_DS_growth_5c) 
-#of these, model 5c has lowest AIC (but 1c within 2 AIC)
-
 AIC(mod_DS_growth_1d, mod_DS_growth_2d, mod_DS_growth_5d) 
 #of these, model 5d has lowest AIC (but 1d within 2 AIC)
 ```
@@ -360,29 +265,8 @@ AIC(mod_DS_growth_1d, mod_DS_growth_2d, mod_DS_growth_5d)
 And now to evaluate residuals of models...
 
 ```{r, echo=FALSE, warning=FALSE}
-# Residuals vs. Fitted Plots
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-
-resid_a <- resid(mod_DS_growth_5a)
-fitted_a <- fitted(mod_DS_growth_5a)
-plot(fitted_a, resid_a, main = "A: Hedges_d ~ mg_cm2, control = addSlist,
-     random =  ~ mg_cm2 | Comparison")
-abline(0,0)
-#mod_DS_growth_1a and mod_DS_growth_3a were within 2 AIC
-
-resid_b <- resid(mod_DS_growth_5b)
-fitted_b <- fitted(mod_DS_growth_5b)
-plot(fitted_b, resid_b, main = "B: smd ~ mg_cm2, control = addSlist,
-     random =  ~ mg_cm2 | Comparison")
-abline(0,0)
-#mod_DS_growth_6b within 1 AIC
-
-resid_c <- resid(mod_DS_growth_5c)
-fitted_c <- fitted(mod_DS_growth_5c)
-plot(fitted_c, resid_c, main = "C: Hedges_d ~ mg_cm2_d, control = addSlist,
-     random =  ~ mg_cm2_d | Comparison")
-abline(0,0)
-#mod_DS_growth_2c within 0.3 AIC
+# Residuals vs. Fitted Plots and Normal Q-Q Plots
+op <- par(mfrow = c(1,2), mar = c(2,2,4,1))
 
 resid_d <- resid(mod_DS_growth_5d)
 fitted_d <- fitted(mod_DS_growth_5d)
@@ -390,335 +274,20 @@ plot(fitted_d, resid_d, main = "D: smd ~ mg_cm2_d, control = addSlist,
      random =  ~ mg_cm2_d | Comparison")
 abline(0,0)
 
-par(op)
-
-
-# Normal Q-Q Plot
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-qqnorm(resid_a)
-qqline(resid_a)
-qqnorm(resid_b)
-qqline(resid_b)
-qqnorm(resid_c)
-qqline(resid_c)
 qqnorm(resid_d)
 qqline(resid_d)
-par(op)
-
-
-# Patterns:
-# 1.  Residuals for all 4 best-fit models are very similar, with moderate magnitudes (<abs(2))
-# 2.  Models A and B have one value that is outside others, but its residual value is fine -- this was probably a point with long exposure duration.
-# 3.  No obvious need to try out log or non-linear models!
-```
-  
-Now let's check out a log, base 10 transformation of sediment exposure to see if it improves the residuals of the models.
-
-```{r, echo=FALSE, warning=FALSE}
-#?mixmeta
-
-# Organizational Note: 
-#All models with 'a' or 'b' at the end of its name have cumulative exposure as its predictor. 
-#All models with 'c' or 'd' at the end of its name have exposure concentration as its predictor. 
-#All models with 'a' or 'c' at the end of its name have manually calculated Hedges' d as its response.
-#All models with 'b' or 'd' at the end of its name have covar.smd calculated Hedges' d as its response.
-
-log10_mg_cm2 <- log10(ES_DS_growth2$Sed_exposure_mg_cm2)
-log10_mg_cm2_d <- log10(ES_DS_growth2$Sed_level_standardized)
-
-# LINEAR FIXED AND RANDOM EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_DS_growth_1a <- mixmeta(Hedges_d ~ log10_mg_cm2, S = Var_d,
-                       random =  ~ log10_mg_cm2 | Comparison,
-                       data = ES_DS_growth2, method = "ml")
-log_mod_DS_growth_1b <- mixmeta(smd ~ log10_mg_cm2, S = vmd,
-                      random =  ~ log10_mg_cm2 | Comparison,
-                      data = ES_DS_growth2, method = "ml")
-log_mod_DS_growth_1c <- mixmeta(Hedges_d ~ log10_mg_cm2_d, S = Var_d,
-                       random =  ~ log10_mg_cm2_d | Comparison,
-                       data = ES_DS_growth2, method = "ml")
-log_mod_DS_growth_1d <- mixmeta(smd ~ log10_mg_cm2_d, S = vmd,
-                      random =  ~ log10_mg_cm2_d | Comparison,
-                      data = ES_DS_growth2, method = "ml")
-
-# LINEAR FIXED AND RANDOM, NESTED EFFECTS NOT ACCOUNTING FOR WITHIN-STUDY CORRELATIONS
-log_mod_DS_growth_2a <- mixmeta(Hedges_d ~ log10_mg_cm2, S = Var_d,
-                       random =  ~ log10_mg_cm2 | Ref/Comparison,
-                       data = ES_DS_growth2, method = "ml")
-log_mod_DS_growth_2b <- mixmeta(smd ~ log10_mg_cm2, S = vmd,
-                      random =  ~ log10_mg_cm2 | Ref/Comparison,
-                      data = ES_DS_growth2, method = "ml")
-log_mod_DS_growth_2c <- mixmeta(Hedges_d ~ log10_mg_cm2_d, S = Var_d,
-                       random =  ~ log10_mg_cm2_d | Ref/Comparison,
-                       data = ES_DS_growth2, method = "ml")
-log_mod_DS_growth_2d <- mixmeta(smd ~ log10_mg_cm2_d, S = vmd,
-                      random =  ~ log10_mg_cm2_d | Ref/Comparison,
-                      data = ES_DS_growth2, method = "ml")
-```
-
-To account for within-comparison correlations in the mixmeta model, I replace the 'S' argument with a 'control' argument, which requires me to provide the covariance matrices, as done with the covar.smd function. 
-
-```{r, echo=FALSE, warning=FALSE}
-# COMPUTE THE WITHIN-COMPARISON CORRELATIONS 
-# already done above but code repeated here...
-#covar_DS_growth <- by(ES_DS_growth, ES_DS_growth$Comparison, function(x) 
-#  covar.smd(Tx_mean, Tx_sd, Tx_n, "smd", method="hedges", data = x))
-
-# LINEAR FIXED AND RANDOM EFFECTS ACCOUNTING FOR WITHIN-COMPARISON CORRELATIONS
-#Code for covariance matrix to include for addSlist for Comparison random effect
-newlist_GRO_log <- list(NA)
-for (i in seq(1,length(covar_DS_growth))) {
-newlist_GRO_log[i] <- list(covar_DS_growth[[i]]$S)
-}
-log_mod_DS_growth_5a <- mixmeta(Hedges_d ~ log10_mg_cm2,
-                       random = ~ log10_mg_cm2 | Comparison,
-                       data=ES_DS_growth2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_GRO_log))
-log_mod_DS_growth_5b <- mixmeta(smd ~ log10_mg_cm2,
-                       random = ~ log10_mg_cm2 | Comparison,
-                       data=ES_DS_growth2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_GRO_log))
-log_mod_DS_growth_5c <- mixmeta(Hedges_d ~ log10_mg_cm2_d,
-                       random = ~ log10_mg_cm2_d | Comparison,
-                       data=ES_DS_growth2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_GRO_log))
-log_mod_DS_growth_5d <- mixmeta(smd ~ log10_mg_cm2_d,
-                       random = ~ log10_mg_cm2_d | Comparison,
-                       data=ES_DS_growth2, method="ml", #using dataset without controls
-                       control=list(addSlist=newlist_GRO_log))
-
-# LINEAR FIXED AND RANDOM, NESTED EFFECTS ACCOUNTING FOR WITHIN-COMPARISON & WITHIN-STUDY CORRELATIONS
-#Code for covariance matrix to include for addSlist for Ref/Comparison
-newlist_GRO_log2 <- list(NA) #collects the list of covariance matrices for the block diag matrix by reference for the nested hierarchial ref/comparison
-templist_GRO_log <- list(NA) #holds temp list of covariance matrices associated with each reference
-templist_GRO_log2 <-list(NA)
-reflista <- ES_DS_growth %>% distinct(Ref,Ref_name,Comparison)
-reflist <- reflista[,1]
-for (i in seq(1,length(unique(reflista$Ref))))  {
-  #pull the elements from covar_DS_growth_b that are all from the same reference [i]
-  templist_GRO_log[i] <-list(covar_DS_growth[reflist==unique(reflista$Ref)[i]])
-  for (j in seq(1,length(templist_GRO_log[[i]]))) {
-  #for each comparison in the reference, pull out the covar matrices (element $S) and put in into templist_GRO_log2
-     templist_GRO_log2[j] <- list(templist_GRO_log[[i]][[j]]$S)
-  }
-  #turn list of covars from all comparison in one reference into block diag matrix
-  newlist_GRO_log2[i] <- list(bdiagMat(templist_GRO_log2))
-  templist_GRO_log2 <- list(NA)
-}
-#Error in getSlist(S, nay, groups, m, k, control$addSlist, control$checkPD) : wrong dimensions in 'addSlist'. See help(mixmetaControl)
-#log_mod_DS_growth_6a <- mixmeta(Hedges_d ~ log10_mg_cm2,
-#                       random = ~ log10_mg_cm2 | Ref/Comparison,
-#                       data=ES_DS_growth2, method="ml", #using dataset without controls
-#                       control=list(addSlist=newlist_GRO_log2))
-#log_mod_DS_growth_6b <- mixmeta(smd ~ log10_mg_cm2,
-#                       random = ~ log10_mg_cm2 | Ref/Comparison,
-#                       data=ES_DS_growth2, method="ml", #using dataset without controls
-#                       control=list(addSlist=newlist_GRO_log2))
-#log_mod_DS_growth_6c <- mixmeta(Hedges_d ~ log10_mg_cm2_d,
-#                       random = ~ log10_mg_cm2_d | Ref/Comparison,
-#                       data=ES_DS_growth2, method="ml", #using dataset without controls
-#                       control=list(addSlist=newlist_GRO_log2))
-#log_mod_DS_growth_6d <- mixmeta(smd ~ log10_mg_cm2_d,
-#                       random = ~ log10_mg_cm2_d | Ref/Comparison,
-#                       data=ES_DS_growth2, method="ml", #using dataset without controls
-#                       control=list(addSlist=newlist_GRO_log2))
-```
-    
-### 3. Model Comparison and Summary
-And now to compare relative fit of logarithmic models...
-```{r, echo=FALSE, warning=FALSE}
-# Model Comparisons
-AIC(mod_DS_growth_5a, log_mod_DS_growth_1a, log_mod_DS_growth_2a, log_mod_DS_growth_5a) 
-#of these, model non-log 5a has lowest AIC (but 1a, 5a within 2 AIC)
-
-AIC(mod_DS_growth_5b, log_mod_DS_growth_1b, log_mod_DS_growth_2b, log_mod_DS_growth_5b) 
-#of these, model 5b has lowest AIC (but 1a, 5a non-log within 2 AIC)
-
-AIC(mod_DS_growth_5c, log_mod_DS_growth_1c, log_mod_DS_growth_2c, log_mod_DS_growth_5c) 
-#of these, model 5c has lowest AIC (but 1c, 5a non-log within 2 AIC)
-
-AIC(mod_DS_growth_5d, log_mod_DS_growth_1d, log_mod_DS_growth_2d, log_mod_DS_growth_5d) 
-#of these, model non-log 5d has lowest AIC (but 5a log within 1 AIC)
-```
-  
-And now to evaluate residuals of models...
-```{r, echo=FALSE, warning=FALSE}
-# Residuals vs. Fitted Plots
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-
-resid_loga <- resid(log_mod_DS_growth_5a)
-fitted_loga <- fitted(log_mod_DS_growth_5a)
-plot(fitted_loga, resid_loga, main = "A: Hedges_d ~ log_mg_cm2, control=addSlist,
-     random =  ~ log_mg_cm2 | Comparison")
-abline(0,0)
-#log_mod_DS_growth_1a and log_mod_DS_growth_3a were within 2 AIC
-
-resid_logb <- resid(log_mod_DS_growth_5b)
-fitted_logb <- fitted(log_mod_DS_growth_5b)
-plot(fitted_logb, resid_logb, main = "B: smd ~ log_mg_cm2, control=addSlist,
-     random =  ~ log_mg_cm2 | Comparison")
-abline(0,0)
-#log_mod_DS_growth_6b within 1 AIC
-
-resid_logc <- resid(log_mod_DS_growth_5c)
-fitted_logc <- fitted(log_mod_DS_growth_5c)
-plot(fitted_logc, resid_logc, main = "C: Hedges_d ~ log_mg_cm2_d, Scontrol=addSlist,
-     random =  ~ log_mg_cm2_d | Comparison")
-abline(0,0)
-#log_mod_DS_growth_2c within 0.3 AIC
-
-resid_logd <- resid(log_mod_DS_growth_5d)
-fitted_logd <- fitted(log_mod_DS_growth_5d)
-plot(fitted_logd, resid_logd, main = "D: smd ~ log_mg_cm2_d, control=addSlist,
-     random =  ~ log_mg_cm2_d | Comparison")
-abline(0,0)
 
 par(op)
-
-
-# Normal Q-Q Plot
-op <- par(mfrow = c(2,2), mar = c(2,2,4,1))
-qqnorm(resid_loga)
-qqline(resid_loga)
-qqnorm(resid_logb)
-qqline(resid_logb)
-qqnorm(resid_logc)
-qqline(resid_logc)
-qqnorm(resid_logd)
-qqline(resid_logd)
-par(op)
-
-
-# Patterns:
-# 1.  Residuals for all 4 best-fit models are very similar and look great -- even spread along fitted values axis and low magnitude residuals.
-# 2.  No need to look at non-linear options
 ```
   
-Residuals for all models are very similar and look great -- even spread along fitted values axis and low magnitude residuals. However, C and D not much improved, so I will defer to linear models for these.
+Patterns:
+1.  Residuals for best-fit models are very similar, with moderate magnitudes (<abs(2))
+2.  No obvious need to try out log or non-linear models!
+
 
 ### 4. Best-Fit Model Summary
   
-#### i. MG/CM^2 IS PREDICTOR, Model using manual calculation of Hedges' *d*
-Now I will predict the effect size along the exposure range and plot with confidence intervals.  
-
-```{r, echo=FALSE, warning=FALSE}
-summary(log_mod_DS_growth_5a)
-
-# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
-#predict(log_mod_DS_growth_5a, newdata=data.frame(Sed_exposure_mg_cm2=13.2), ci=TRUE)
-
-# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
-pred_log_mod_DS_growth_5a <- predict(log_mod_DS_growth_5a, newdata=ES_DS_growth2, ci=TRUE)
-ES_DS_growth2_CI <- cbind(ES_DS_growth2, pred_log_mod_DS_growth_5a)
-#head(ES_DS_growth2_CI)
-min_exp_a <- ES_DS_growth2_CI %>% 
-  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
-  filter(overlap0==FALSE) %>% 
-  summarize(min_exp_a=min(Sed_exposure_mg_cm2))
-min_exp_a2 <- as.numeric(min_exp_a)
-
-ggplot(ES_DS_growth2_CI, 
-       aes(x = Sed_exposure_mg_cm2,
-           y = Hedges_d,
-           color = Ref,
-           ymin = Hedges_d-Var_d,
-           ymax = Hedges_d+Var_d)) + 
-  geom_pointrange() +
-  labs(x = expression("Sediment cumulative exposure (mg/cm"^"2"*")"),
-       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  geom_vline(xintercept=min_exp_a2, linetype="dashed", color = "red") +
-  geom_ribbon(aes(x = Sed_exposure_mg_cm2, y = Hedges_d,
-                  ymin = ci.lb, ymax = ci.ub), 
-              fill = "grey70", alpha = .15, 
-              show.legend=FALSE, inherit.aes=FALSE) +
-  geom_line(aes(x = Sed_exposure_mg_cm2, y = fit), inherit.aes=FALSE) +
-  theme_classic() +
-  scale_x_log10(limits = c(10,40000), breaks=c(10,100,1000,10000,min_exp_a2), 
-                label=c("10","100","1000","10000",round(min_exp_a2,digits=1)))
-```
-  
-#### ii. MG/CM^2 IS PREDICTOR, Model using dosresmeta calculation of Hedges' *d*
-Now I will predict the effect size along the exposure range and plot with confidence intervals.  
-
-```{r, echo=FALSE, warning=FALSE}
-summary(log_mod_DS_growth_5b)
-
-# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
-#predict(log_mod_DS_growth_5b, newdata=data.frame(Sed_exposure_mg_cm2=13.2), ci=TRUE)
-
-# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
-pred_log_mod_DS_growth_5b <- predict(log_mod_DS_growth_5b, newdata=ES_DS_growth2, ci=TRUE)
-ES_DS_growth2_CI2 <- cbind(ES_DS_growth2, pred_log_mod_DS_growth_5b)
-#head(ES_DS_growth2_CI2)
-min_exp_b <- ES_DS_growth2_CI2 %>% 
-  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
-  filter(overlap0==FALSE) %>% 
-  summarize(min_exp_b=min(Sed_exposure_mg_cm2))
-min_exp_b2 <- as.numeric(min_exp_b)
-
-ggplot(ES_DS_growth2_CI2, 
-       aes(x = Sed_exposure_mg_cm2,
-           y = smd,
-           color = Ref,
-           ymin = smd-vmd,
-           ymax = smd+vmd)) + 
-  geom_pointrange() +
-  labs(x = expression("Sediment cumulative exposure (mg/cm"^"2"*")"),
-       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  geom_vline(xintercept=min_exp_b2, linetype="dashed", color = "red") +
-  geom_ribbon(aes(x = Sed_exposure_mg_cm2, y = smd,
-                  ymin = ci.lb, ymax = ci.ub), 
-              fill = "grey70", alpha = .15, 
-              show.legend=FALSE, inherit.aes=FALSE) +
-  geom_line(aes(x = Sed_exposure_mg_cm2, y = fit), inherit.aes=FALSE) +
-  theme_classic() +
-  scale_x_log10(limits = c(10,40000), breaks=c(10,100,1000,10000,min_exp_b2), 
-                label=c("10","100","1000","10000",round(min_exp_b2,digits=1)))
-```
-  
-#### iii. MG/CM^2/DAY IS PREDICTOR, Model using manual calculation of Hedges' *d*
-Now I will predict the effect size along the exposure range and plot with confidence intervals.  
-
-```{r, echo=FALSE, warning=FALSE}
-summary(mod_DS_growth_5c)
-
-# PREDICT THE EFFECT SIZE FOR 13.2 mg/cm2 FROM TWO MODELS (LOAEL identified by binary analyses)
-#predict(mod_DS_growth_5c, newdata=data.frame(Sed_exposure_mg_cm2=13.2), ci=TRUE)
-
-# PREDICT THE EFFECT SIZE AND PLOT WITH CONFIDENCE INTERVALS
-pred_mod_DS_growth_5c <- predict(mod_DS_growth_5c, newdata=ES_DS_growth2, ci=TRUE)
-ES_DS_growth2_CI3 <- cbind(ES_DS_growth2, pred_mod_DS_growth_5c)
-#head(ES_DS_growth2_CI)
-min_conc_c <- ES_DS_growth2_CI3 %>% 
-  mutate(overlap0 = 0 >= ci.lb & 0 <= ci.ub) %>% 
-  filter(overlap0==FALSE) %>% 
-  summarize(min_conc_c=min(Sed_level_standardized))
-min_conc_c2 <- as.numeric(min_conc_c)
-
-ggplot(ES_DS_growth2_CI3, 
-       aes(x = Sed_level_standardized,
-           y = Hedges_d,
-           color = Ref,
-           ymin = Hedges_d-Var_d,
-           ymax = Hedges_d+Var_d)) + 
-  geom_pointrange() +
-  labs(x = expression("Sediment exposure concentration (mg/cm"^"2"*"/day)"),
-       y = expression("Effect size (Hedges'"~italic(d)~"+/- variance of"~italic(d)~")"),
-       color = "Study") +
-  geom_abline(intercept=0, slope=0) +
-  geom_vline(xintercept=min_conc_c2, linetype="dashed", color = "red") +
-  geom_ribbon(aes(x = Sed_level_standardized, y = Hedges_d,
-                  ymin = ci.lb, ymax = ci.ub), 
-              fill = "grey70", alpha = .15, 
-              show.legend=FALSE, inherit.aes=FALSE) +
-  geom_line(aes(x = Sed_level_standardized, y = fit), inherit.aes=FALSE) +
-  theme_classic()
-```
-  
-#### iv. MG/CM^2/DAY IS PREDICTOR, Model using dosresmeta calculation of Hedges' *d*
+#### MG/CM^2/DAY IS PREDICTOR, Model using dosresmeta calculation of Hedges' *d*
 Now I will predict the effect size along the exposure range and plot with confidence intervals.  
 
 ```{r, echo=FALSE, warning=FALSE}
@@ -737,7 +306,7 @@ min_conc_d <- ES_DS_growth2_CI4 %>%
   summarize(min_conc_d=min(Sed_level_standardized))
 min_conc_d2 <- as.numeric(min_conc_d)
 
-ggplot(ES_DS_growth2_CI2, 
+ggplot(ES_DS_growth2_CI4, 
        aes(x = Sed_level_standardized,
            y = smd,
            color = Ref,
