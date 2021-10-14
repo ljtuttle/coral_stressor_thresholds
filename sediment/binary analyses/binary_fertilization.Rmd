@@ -168,13 +168,13 @@ mod3 <- glm(Binary_reduced_fertilization ~ Sed_level_stand_mg*Sed_exposure_days,
 #In this case, exposure duration is not so important, but I've included models with this as a fixed effect, just to maintain consistency with other coral responses for which exposure duration may matter more
 mod4 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + (1 | Gsp), 
               family = binomial, data = fertSS2)
-mod5 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp), 
+mod5 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Gsp),
               family = binomial, data = fertSS2)
 mod6 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Gsp), 
               family = binomial, data = fertSS2)
 mod7 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + (1 | Ref), 
               family = binomial, data = fertSS2)
-mod8 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Ref), 
+mod8 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg + Sed_exposure_days + (1 | Ref),
               family = binomial, data = fertSS2)
 mod9 <- glmer(Binary_reduced_fertilization ~ Sed_level_stand_mg*Sed_exposure_days + (1 | Ref), 
               family = binomial, data = fertSS2)
@@ -234,6 +234,8 @@ anova(mod7_log,mod7_log2) #original (log) still best
 
 print(summary(mod7_log), correlation=FALSE)
 #The response is normally(?) distributed across studies with a standard deviation of 2.508. In other words, the typical difference between studies in the response is 2.508.
+
+summary(mod8)
 
 ```
   
